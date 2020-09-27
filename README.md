@@ -11,7 +11,9 @@ Lab excercises of the course "Fundamentals of Computer Vision" from the Master's
 
 ## Usage
 To compile, open a terminal into an excercise folder and type the following commands:
+
 ```
+$ mkdir build
 $ cd build
 $ cmake ..
 $ make
