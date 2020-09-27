@@ -105,7 +105,7 @@ int main(int argc, char **argv)
 		// 	M.data[i+M.elemSize1()] = i + 1; //G
 		// 	M.data[i+M.elemSize1()+M.elemSize1()] = i + 2; //R
 		// }
-
+ 
 		/* Accesso riga/colonna per immagine a 3 canali di 1 byte ciascuno, RGB ad esempio */
 		// for(int v =0;v<M.rows;++v)
 		// {
