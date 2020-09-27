@@ -5,8 +5,8 @@ Lab excercises of the course "Fundamentals of Computer Vision" from the Master's
 
 - C++ 11
 - OpenCV
-- make
-- cmake
+- Make
+- CMake
   
 
 ## Usage
