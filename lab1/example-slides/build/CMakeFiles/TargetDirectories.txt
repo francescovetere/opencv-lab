@@ -1,7 +1,0 @@
-/home/francesco/Desktop/VA/lab/lab1/example-slides/build/CMakeFiles/install/strip.dir
-/home/francesco/Desktop/VA/lab/lab1/example-slides/build/CMakeFiles/install/local.dir
-/home/francesco/Desktop/VA/lab/lab1/example-slides/build/CMakeFiles/install.dir
-/home/francesco/Desktop/VA/lab/lab1/example-slides/build/CMakeFiles/list_install_components.dir
-/home/francesco/Desktop/VA/lab/lab1/example-slides/build/CMakeFiles/rebuild_cache.dir
-/home/francesco/Desktop/VA/lab/lab1/example-slides/build/CMakeFiles/edit_cache.dir
-/home/francesco/Desktop/VA/lab/lab1/example-slides/build/CMakeFiles/example-slides.dir
