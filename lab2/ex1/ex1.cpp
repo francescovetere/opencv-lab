@@ -1,3 +1,8 @@
+/**
+ * Caricate l'immagine di Lenna e stampate a console il valore dei canali R G B tramite cout
+ * - prima in sequenza
+ * - poi andando a capo dopo ogni riga dell'immagie
+ */
 //OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -74,81 +79,48 @@ int main(int argc, char **argv)
 		//opening file
 		std::cout<<"Opening "<<frame_name<<std::endl;
 
-		//Dichiariamo una variabile immagine in OpenCv
-		cv::Mat M;
-		
-		//Leggiamo un’immagine da file
-		//Attenzione! Di default OpenCV apre le immagini in formato RGB!
-		//Se vogliamo aprire un’immagine gray scale, dobbiamo specificarlo:
-		M = cv::imread(frame_name, CV_8UC1);
-		if(M.empty())
+		cv::Mat image = cv::imread(frame_name); /// open in RGB mode
+		if(image.empty())
 		{
 			std::cout<<"Unable to open "<<frame_name<<std::endl;
 			return 1;
-		} 
-		
-		//Stampiamo sul terminale l'immagine
-		// std::cout << "M = "<< std::endl << " " << M << std::endl << std::endl;
+		}
 
-		
 		//////////////////////
 		//processing code here
-
-		/* Immagine come array semplice di unsigned char */
-		// for(unsigned int i = 0; i < M.rows * M.cols * M.elemSize(); ++i)
-		// 	M.data[i] = i;
-		
-		/* Immagine come array di pixel a 3 canali di 1 byte ciascuno, RGB ad esempio */
-		// for(unsigned int i = 0; i<M.rows*M.cols*M.elemSize(); i+=M.elemSize())
-		// {
-		// 	M.data[i] = i; //B
-		// 	M.data[i+M.elemSize1()] = i + 1; //G
-		// 	M.data[i+M.elemSize1()+M.elemSize1()] = i + 2; //R
-		// }
- 
-		/* Accesso riga/colonna per immagine a 3 canali di 1 byte ciascuno, RGB ad esempio */
-		// for(int v =0;v<M.rows;++v)
-		// {
-		// 	for(int u=0;u<M.cols;++u)
-		// 	{
-		// 		M.data[ (u + v*M.cols)*3] = u; //B
-		// 		M.data[ (u + v*M.cols)*3 + 1] = u+1; //G
-		// 		M.data[ (u + v*M.cols)*3 + 2] = u+2; //R
-		// 	}
-		// }
 
 		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
 		   (metodo generale)
 		*/
-		for(int v =0;v<M.rows;++v)
+		for(int v = 0; v < image.rows; ++v)
 		{
-			for(int u=0;u<M.cols;++u)
+			for(int u = 0;u < image.cols; ++u)
 			{
-				for(int k=0;k<M.channels();++k)
-					M.data[ (u + v*M.cols)*M.channels() + k] = u + k;
-			}
-		}
+				for(int k = 0;k < image.channels(); ++k) {
+					switch(k) {
+						case 0: 
+							std::cout << "B:";
+							break;
+						case 1:
+							std::cout << "G:";
+							break;
+						case 2:
+							std::cout << "R:";
+							break;
+					}
 
-		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
-		   (con at())
-		*/
-		// std::cout << M.channels() << std::endl;
-		// for(int v =0;v<M.rows;++v)
-		// {
-		// 	for(int u=0;u<M.cols;++u)
-		// 	{
-		// 		for(int k=0;k<M.channels();++k)
-		// 			M.at<cv::Vec3b>(v, u)[k-1] = u + k;
-		// 	}
-		// }
+					std::cout << (int) image.data[(v*image.cols + u)*image.channels() + k] << " ";
+				}
+			}
+
+			std::cout << "\n\n";
+		}
 
 		/////////////////////
 
-		//Creiamo una finestra che chiamiamo “test”
-		cv::namedWindow("test", cv::WINDOW_NORMAL);
-
-		//Visualizziamo nella finestra l'immagine
-		cv::imshow("test", M);
+		//display image
+		cv::namedWindow("image", cv::WINDOW_NORMAL);
+		cv::imshow("image", image);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
