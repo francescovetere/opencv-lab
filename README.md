@@ -3,10 +3,10 @@ Lab excercises of the course "Fundamentals of Computer Vision" from the Master's
 
 ## Prerequisites
 
-- g++
+- C++ 11
 - OpenCV
-- make
-- cmake
+- Make
+- CMake
   
 
 ## Usage
