@@ -1,7 +1,13 @@
-/**
- * Caricate l'immagine di Lenna e fate un flip verticale:
- * creare una nuova immagine di dimensioni w e h ottenuta invertendo l'ordine delle righe dell'imm originale
+/** ex-7bis
+ * Caricate l’imagine di Lena e fate un Crop generico:
+ * - Generalizziamo il caso precedente, con ampiezza e posizione del cropping configurabili
+ * - Definiamo una regione di cropping con 4 valori:
+		riga e colonna dell'estremo in alto a sinistra (top left)
+		larghezza
+		Altezza
+	Si tratta sempre di estrarre una sottoparte dell'immagine e metterla in un altra della dimensione giusta corrispondente
  */
+
 //OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -87,24 +93,30 @@ int main(int argc, char **argv)
 
 		//////////////////////
 		//processing code here
+		
+		// Rettangolo di crop, delimitato da questa quadrupla
+		unsigned int top_left_row = 50;
+		unsigned int top_left_col = 50;
+		unsigned int width = 200;
+		unsigned int height = 200;
 
-		cv::Mat output_img(input_img.rows, input_img.cols, CV_8UC3, cv::Scalar(0, 0, 0));
+		cv::Mat output_img(top_left_row + height, top_left_col + width, CV_8UC3, cv::Scalar(0, 0, 0));
+		std::cout << output_img.rows << " " << output_img.cols << std::endl;
 
 		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
 		   (metodo generale)
 		*/
 		for(int v = 0; v < output_img.rows; ++v)
-		{	
+		{
 			for(int u = 0;u < output_img.cols; ++u)
 			{
-				for(int k = 0;k < output_img.channels(); ++k) 
-				{	// flip verticale: in input_img, parto dall'ultima riga
+				for(int k = 0;k < output_img.channels(); ++k)
+				{	
 					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] 
-					= input_img.data[((input_img.rows - v)*input_img.cols + u)*input_img.channels() + k];
+					= input_img.data[((top_left_row + v*input_img.cols) + top_left_col + u)*input_img.channels() + k];
 				}
 			}
 		}
-		
 
 		/////////////////////
 

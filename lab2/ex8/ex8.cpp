@@ -1,7 +1,11 @@
 /**
- * Caricate l'immagine di Lenna e fate un flip verticale:
- * creare una nuova immagine di dimensioni w e h ottenuta invertendo l'ordine delle righe dell'imm originale
+ * Caricate l’immagine di Lena e fate un Padding generico:
+- Si tratta di circondare l'immagine orginale con una cornice SIMMETRICA e CONTIGUA di pixel aggiuntivi.
+- Puo' essere visto come il complementare del cropping, dove riduco la dimensione dell'immagine.
+- Ad esempio, partendo da un'immagine di 640x480 e volendo effettuare un padding di 6 pixel, avremo alla fine un'immagine di 646x486.
+- L'immagine originale si trovara' al centro di quella nuova, circondata da una cornice di 3 pixel //su ogni lato.
  */
+
 //OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -87,24 +91,29 @@ int main(int argc, char **argv)
 
 		//////////////////////
 		//processing code here
+		
+		const int PADDING_VAL = 6; 
 
-		cv::Mat output_img(input_img.rows, input_img.cols, CV_8UC3, cv::Scalar(0, 0, 0));
+		cv::Mat output_img(input_img.rows + PADDING_VAL, input_img.cols + PADDING_VAL, CV_8UC3, cv::Scalar(0, 0, 0));
+		std::cout << output_img.rows << " " << output_img.cols << std::endl;
 
 		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
 		   (metodo generale)
 		*/
-		for(int v = 0; v < output_img.rows; ++v)
-		{	
-			for(int u = 0;u < output_img.cols; ++u)
+		for(int v = PADDING_VAL; v < output_img.rows - PADDING_VAL; ++v)
+		{
+			for(int u = PADDING_VAL; u < output_img.cols - PADDING_VAL; ++u)
 			{
-				for(int k = 0;k < output_img.channels(); ++k) 
-				{	// flip verticale: in input_img, parto dall'ultima riga
-					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] 
-					= input_img.data[((input_img.rows - v)*input_img.cols + u)*input_img.channels() + k];
+				for(int k = 0; k < output_img.channels(); ++k)
+				{	
+					if(v < PADDING_VAL || v > output_img.rows - PADDING_VAL || u < PADDING_VAL || u > output_img.cols - PADDING_VAL)
+						output_img.data[(v*output_img.cols + u)*output_img.channels() + k] = 0;
+					else
+						output_img.data[(v*output_img.cols + u)*output_img.channels() + k]
+						= input_img.data[(v*input_img.cols + u)*input_img.channels() + k];
 				}
 			}
 		}
-		
 
 		/////////////////////
 
