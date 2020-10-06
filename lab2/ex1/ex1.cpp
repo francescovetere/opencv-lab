@@ -1,7 +1,7 @@
 /**
  * Caricate l'immagine di Lenna e stampate a console il valore dei canali R G B tramite cout
  * - prima in sequenza
- * - poi andando a capo dopo ogni riga dell'immagie
+ * - poi andando a capo dopo ogni riga dell'immagine
  */
 //OpenCV
 #include <opencv2/core/core.hpp>

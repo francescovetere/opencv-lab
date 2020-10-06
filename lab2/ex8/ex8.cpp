@@ -1,9 +1,5 @@
 /**
- * Caricate l’immagine di Lena e fate un Padding generico:
-- Si tratta di circondare l'immagine orginale con una cornice SIMMETRICA e CONTIGUA di pixel aggiuntivi.
-- Puo' essere visto come il complementare del cropping, dove riduco la dimensione dell'immagine.
-- Ad esempio, partendo da un'immagine di 640x480 e volendo effettuare un padding di 6 pixel, avremo alla fine un'immagine di 646x486.
-- L'immagine originale si trovara' al centro di quella nuova, circondata da una cornice di 3 pixel //su ogni lato.
+ * Caricate l’immagine di Lenna e fate uno zero padding
  */
 
 //OpenCV

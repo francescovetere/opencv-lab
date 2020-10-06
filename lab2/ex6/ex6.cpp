@@ -2,6 +2,7 @@
  * Caricate l'immagine di Lenna e fate un flip verticale:
  * creare una nuova immagine di dimensioni w e h ottenuta invertendo l'ordine delle righe dell'imm originale
  */
+
 //OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
