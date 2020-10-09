@@ -1,11 +1,9 @@
-/** ex7 e 7bis
- * Caricate l’imagine di Lena e fate un Crop generico:
- * - Generalizziamo il caso precedente, con ampiezza e posizione del cropping configurabili
- * - Definiamo una regione di cropping con 4 valori:
-		riga e colonna dell'estremo in alto a sinistra (top left)
-		larghezza
-		Altezza
-	Si tratta sempre di estrarre una sottoparte dell'immagine e metterla in un altra della dimensione giusta corrispondente
+/**
+ * Demosaicatura DOWNSAMPLE 2X :
+ * - l'immagine di uscita sara' di dimensioni w/2 x h/2, a toni di grigio (CV_8U)
+ * - ogni 4 pixel GBRG dell'immagine originale estraete un tono di grigio pari alla media dei canali G 
+ *   da inserire nell'immagine di output
+ * - I pattern non si sovrappongono, vi spostate quindi di 4 in 4 nell'immagine originale
  */
 
 //OpenCV
@@ -19,7 +17,7 @@
 #include <string>
 
 struct ArgumentList {
-	std::string img_name;		    //!< input_img file name
+	std::string input_img_name;		    //!< input_img file name
 	int wait_t;                     //!< waiting time
 };
 
@@ -40,7 +38,7 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 	while(i<argc)
 	{
 		if(std::string(argv[i]) == "-i") {
-			args.img_name = std::string(argv[++i]);
+			args.input_img_name = std::string(argv[++i]);
 		}
 
 		if(std::string(argv[i]) == "-t") {
@@ -76,15 +74,15 @@ int main(int argc, char **argv)
 		//generating file name
 		//
 		//multi frame case
-		if(args.img_name.find('%') != std::string::npos)
-			sprintf(frame_name,(const char*)(args.img_name.c_str()),frame_number);
+		if(args.input_img_name.find('%') != std::string::npos)
+			sprintf(frame_name,(const char*)(args.input_img_name.c_str()),frame_number);
 		else //single frame case
-			sprintf(frame_name,"%s",args.img_name.c_str());
+			sprintf(frame_name,"%s",args.input_img_name.c_str());
 
 		//opening file
 		std::cout<<"Opening "<<frame_name<<std::endl;
 
-		cv::Mat input_img = cv::imread(frame_name); /// open in RGB mode
+		cv::Mat input_img = cv::imread(frame_name, CV_8U); /// open in CV_8U mode
 		if(input_img.empty())
 		{
 			std::cout<<"Unable to open "<<frame_name<<std::endl;
@@ -94,26 +92,33 @@ int main(int argc, char **argv)
 		//////////////////////
 		//processing code here
 		
-		// Rettangolo di crop, delimitato da questa quadrupla
-		unsigned int top_left_row = 300;
-		unsigned int top_left_col = 300;
-		unsigned int width = 500;
-		unsigned int height = 500;
+		// Output image
+		cv::Mat output_img(input_img.rows/2, input_img.cols/2, CV_8U, cv::Scalar(0, 0, 0));
+	
+		/** Accesso riga/colonna per immagine a 1 canale di 1 byte
+		 * Pattern GBRG
+		 * G B G B G B
+		 * R G R G R G
+		 **/ 
 
-		cv::Mat output_img(height - top_left_row, width - top_left_col, CV_8UC3, cv::Scalar(0, 0, 0));
-		std::cout << output_img.rows << " " << output_img.cols << std::endl;
+		int G_offset = 1; // quanto sono distanziati fra loro due valori G (sia per riga che per colonna)
+		int stride = 2;   // di quanto avanzo nell'immagine di input
 
-		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
-		   (metodo generale)
-		*/
+		int G1, G2;		  // i due valori di G nel pattern analizzato attualmente
+		int G_avg;		  // media aritmetica di G1 e G2
+		
 		for(int v = 0; v < output_img.rows; ++v)
 		{
 			for(int u = 0;u < output_img.cols; ++u)
-			{
-				for(int k = 0;k < output_img.channels(); ++k)
-				{	
-					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] 
-					= input_img.data[(((top_left_row + v)*input_img.cols) + top_left_col + u)*input_img.channels() + k];
+			{	
+				/**** questo ciclo for sui channels e' inutile, siccome input_img.channels() = 1 (immagine CV_8U) ****/
+				for(int k = 0;k < input_img.channels(); ++k) { 
+
+					G1 = input_img.data[stride * ((v*input_img.cols + u)*input_img.channels() + k)];
+					G2 = input_img.data[stride * (((v + G_offset)*input_img.cols + u + G_offset)*input_img.channels() + k)];
+					G_avg = (G1 + G2) / 2;
+
+					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] = G_avg;
 				}
 			}
 		}
@@ -127,7 +132,7 @@ int main(int argc, char **argv)
 		//display output_img
 		cv::namedWindow("output_img", cv::WINDOW_NORMAL);
 		cv::imshow("output_img", output_img);
-
+		
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
 		std::cout<<"key "<<int(key)<<std::endl;

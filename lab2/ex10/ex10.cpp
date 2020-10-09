@@ -1,11 +1,7 @@
-/** ex7 e 7bis
- * Caricate l’imagine di Lena e fate un Crop generico:
- * - Generalizziamo il caso precedente, con ampiezza e posizione del cropping configurabili
- * - Definiamo una regione di cropping con 4 valori:
-		riga e colonna dell'estremo in alto a sinistra (top left)
-		larghezza
-		Altezza
-	Si tratta sempre di estrarre una sottoparte dell'immagine e metterla in un altra della dimensione giusta corrispondente
+/**
+ * Scambiate l'ordine dei canali di colore:
+ * Ad esempio R->G G->B B->R
+ * Dovreste ottenere un'immagine con colori sbagliati
  */
 
 //OpenCV
@@ -19,7 +15,7 @@
 #include <string>
 
 struct ArgumentList {
-	std::string img_name;		    //!< input_img file name
+	std::string image_name;		    //!< image file name
 	int wait_t;                     //!< waiting time
 };
 
@@ -27,11 +23,11 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 
 	if(argc<3 || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help"))
 	{
-		std::cout<<"usage: simple -i <input_img_name>"<<std::endl;
+		std::cout<<"usage: simple -i <image_name>"<<std::endl;
 		std::cout<<"exit:  type q"<<std::endl<<std::endl;
 		std::cout<<"Allowed options:"<<std::endl<<
 				"   -h	                     produce help message"<<std::endl<<
-				"   -i arg                   input_img name. Use %0xd format for multiple input_imgs."<<std::endl<<
+				"   -i arg                   image name. Use %0xd format for multiple images."<<std::endl<<
 				"   -t arg                   wait before next frame (ms) [default = 0]"<<std::endl<<std::endl<<std::endl;
 		return false;
 	}
@@ -40,7 +36,7 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 	while(i<argc)
 	{
 		if(std::string(argv[i]) == "-i") {
-			args.img_name = std::string(argv[++i]);
+			args.image_name = std::string(argv[++i]);
 		}
 
 		if(std::string(argv[i]) == "-t") {
@@ -76,57 +72,49 @@ int main(int argc, char **argv)
 		//generating file name
 		//
 		//multi frame case
-		if(args.img_name.find('%') != std::string::npos)
-			sprintf(frame_name,(const char*)(args.img_name.c_str()),frame_number);
+		if(args.image_name.find('%') != std::string::npos)
+			sprintf(frame_name,(const char*)(args.image_name.c_str()),frame_number);
 		else //single frame case
-			sprintf(frame_name,"%s",args.img_name.c_str());
+			sprintf(frame_name,"%s",args.image_name.c_str());
 
 		//opening file
 		std::cout<<"Opening "<<frame_name<<std::endl;
 
-		cv::Mat input_img = cv::imread(frame_name); /// open in RGB mode
-		if(input_img.empty())
+		cv::Mat image = cv::imread(frame_name); /// open in RGB mode
+		if(image.empty())
 		{
 			std::cout<<"Unable to open "<<frame_name<<std::endl;
 			return 1;
 		}
 
+		cv::Mat output_img(image.rows, image.cols, CV_8UC3, cv::Scalar(0, 0, 0));
 		//////////////////////
 		//processing code here
-		
-		// Rettangolo di crop, delimitato da questa quadrupla
-		unsigned int top_left_row = 300;
-		unsigned int top_left_col = 300;
-		unsigned int width = 500;
-		unsigned int height = 500;
-
-		cv::Mat output_img(height - top_left_row, width - top_left_col, CV_8UC3, cv::Scalar(0, 0, 0));
-		std::cout << output_img.rows << " " << output_img.cols << std::endl;
 
 		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
 		   (metodo generale)
 		*/
-		for(int v = 0; v < output_img.rows; ++v)
+		for(int v = 0; v < image.rows; ++v)
 		{
-			for(int u = 0;u < output_img.cols; ++u)
+			for(int u = 0;u < image.cols; ++u)
 			{
-				for(int k = 0;k < output_img.channels(); ++k)
-				{	
-					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] 
-					= input_img.data[(((top_left_row + v)*input_img.cols) + top_left_col + u)*input_img.channels() + k];
+				for(int k = 0;k < image.channels(); ++k) {
+					output_img.data[(v*image.cols + u)*image.channels() + k] = image.data[((v*image.cols + u)*image.channels() + ((k + 1)%image.channels()))];
 				}
 			}
+
+			std::cout << "\n\n";
 		}
 
 		/////////////////////
 
-		//display input_img
-		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
-		cv::imshow("input_img", input_img);
+		//display image
+		cv::namedWindow("image", cv::WINDOW_NORMAL);
+		cv::imshow("image", image);
 
-		//display output_img
-		cv::namedWindow("output_img", cv::WINDOW_NORMAL);
-		cv::imshow("output_img", output_img);
+		//display image
+		cv::namedWindow("output_image", cv::WINDOW_NORMAL);
+		cv::imshow("output_image", output_img);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);

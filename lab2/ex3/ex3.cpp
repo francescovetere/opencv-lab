@@ -89,8 +89,8 @@ int main(int argc, char **argv)
 		//processing code here
 		
 		const int DOWNSAMPLE_FACT = 2;
-
-		cv::Mat output_img(input_img.rows/2, input_img.cols, CV_8UC3, cv::Scalar(0, 0, 0));
+		                                                                                     
+		cv::Mat output_img(input_img.rows/DOWNSAMPLE_FACT, input_img.cols, CV_8UC3, cv::Scalar(0, 0, 0));
 
 		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
 		   (metodo generale)
