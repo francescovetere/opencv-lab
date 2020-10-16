@@ -28,7 +28,7 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 
 	if(argc<3 || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help"))
 	{
-		std::cout<<"usage: " << argv[0] << "-i <input_img_name>" <<std::endl;
+		std::cout<<"usage: " << argv[0] << " -i <input_img_name>" <<std::endl;
 		std::cout<<"exit:  type q"<<std::endl<<std::endl;
 		std::cout<<"Allowed options:"<<std::endl<<
 				"   -h	                     produce help message"<<std::endl<<
@@ -201,15 +201,13 @@ int main(int argc, char **argv)
 		// 	std::cout << "histogram[" << i << "] = " << histogram[i] << std::endl;
 		// }  
 		
-		//Rimuovo lo sfondo, ovvero i primi 50 livelli
-		int background_levels = 50;
-		int* histogram_foreground = new int[max_intensity - background_levels];
+		// Rimuovo lo sfondo, ovvero i primi 50 livelli
+		for(int i = 0; i < 50; ++i){
+			histogram[i] = 0;
+		}  
 
-		for(int i = 0; i < max_intensity - background_levels; ++i) histogram_foreground[i] = histogram[i + background_levels];
-		// for(int i = 0; i < max_intensity - background_levels; ++i) std::cout << "histogram_foreground[" << i << "] = " << histogram_foreground[i] << std::endl; 
-		
 		// Calcolo la soglia ideale
-		int threshold = otsu_threshold(histogram_foreground, max_intensity - background_levels) + background_levels;
+		int threshold = otsu_threshold(histogram, max_intensity);
 
 		std::cout << "\notsu threshold: " << threshold << std::endl;
 
