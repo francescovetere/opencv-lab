@@ -28,7 +28,7 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 
 	if(argc<3 || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help"))
 	{
-		std::cout<<"usage: simple -i <input_img_name>"<<std::endl;
+		std::cout<<"usage: " << argv[0] << "-i <input_img_name>" <<std::endl;
 		std::cout<<"exit:  type q"<<std::endl<<std::endl;
 		std::cout<<"Allowed options:"<<std::endl<<
 				"   -h	                     produce help message"<<std::endl<<
@@ -56,6 +56,8 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 	return true;
 }
 
+/** Funzione per il calcolo dell'istogramma 
+ */
 int* compute_histogram(const cv::Mat& img, int max_levels) {
 	int* histogram = new int[max_levels];
 
@@ -73,8 +75,8 @@ int* compute_histogram(const cv::Mat& img, int max_levels) {
 }
 
 /**
- * Funzione per il calcolo della varianza degli elementi un array arr
- * partendo da begin e terminando in end
+ * Funzione per il calcolo della varianza degli elementi un array
+ * (partendo da begin e terminando in end)
  * varianza di n dati: sigma^2(n) = sum{i=1, n} (x_i - media_x)^2 / n
  */
 double variance(int* arr, int begin, int end){
@@ -114,7 +116,7 @@ int weight(int* histogram, int begin, int end) {
 }
 
 /**
- * Funzione che riceve in input un istogramma(assunto bimodale) ed il suo numero di livelli,
+ * Funzione che riceve in input un istogramma (assunto bimodale) ed il suo numero di livelli,
  * e ritorna in output la soglia migliore tramite metodo di Otsu 
  */
 int otsu_threshold(int* histogram, int levels) {
@@ -153,8 +155,6 @@ int main(int argc, char **argv)
 	int frame_number = 0;
 	char frame_name[256];
 	bool exit_loop = false;
-
-	std::cout<<"Simple program."<<std::endl;
 
 	//////////////////////
 	//parse argument list:
@@ -232,11 +232,6 @@ int main(int argc, char **argv)
 		//display output_img
 		cv::namedWindow("output_img", cv::WINDOW_NORMAL);
 		cv::imshow("output_img", output_img);
-
-		// save output_img
-		cv::imwrite("../../images/binarized-organs.pbm", output_img);
-		
-		std::cout << "../../images/binarized-organs.pbm has been successfully saved" << std::endl;
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
