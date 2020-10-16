@@ -1,7 +1,11 @@
 /**
- * Caricate l'immagine di Lenna e fate un downsample 2x delle sole righe:
- * una nuova immagine di dimensioni w e h/2 ottenuta prendendo una riga si ed una no
+ * Sull’immagine binarizzata ottenuta nell'ex1, applicare:
+ * 1. Dilation
+ * 2. Erosion
+ * 3. Closing
+ * 4. Opening
  */
+
 //OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -11,6 +15,8 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+
+const int max_intensity = 255;
 
 struct ArgumentList {
 	std::string img_name;		    //!< input_img file name
@@ -47,6 +53,61 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 	}
 
 	return true;
+}
+
+// OR fra 1-pixel dell'immagine di input e corrispondenti pixel dell'elemento strutturale
+// N.B. cornice piu' esterna immagine di input esclusa
+void dilation(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	for(int v = 0; v < output.rows - 2; ++v)
+	{	
+		for(int u = 0; u < output.cols - 2; ++u)
+		{
+			// se siamo su un 1-pixel dell'imm di input, procedo con l'effettuare l'OR sul vicinato
+			if(input.data[(v*input.cols + u)] == max_intensity) {
+				// esamino tutti i 9 pixel dell'elemento strutturale, e ne faccio l'OR coi corrispondenti pixel sull'immagine
+				for(int i = 0; i < structural_element.rows; ++i)
+					for(int j = 0; j < structural_element.cols; ++j)
+						if((int) (input.data[(v+i)*input.cols + (u+j)] + structural_element.data[i*structural_element.cols + j]) > 0)
+							output.data[(v+i)*output.cols + (u+i)] = max_intensity;
+						else output.data[(v+i)*output.cols + (u+i)] = 0;
+			}
+		}
+	}
+}
+
+// AND fra tutti i pixel dell'immagine di input e corrispondenti pixel dell'elemento strutturale
+// N.B. cornice piu' esterna immagine di input esclusa
+void erosion(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	bool ok;
+
+	for(int v = 0; v < output.rows - 2; ++v)
+	{	
+		for(int u = 0; u < output.cols - 2; ++u)
+		{
+			ok = true;
+			// esamino tutti i 9 pixel dell'elemento strutturale, e ne faccio l'AND coi corrispondenti pixel sull'immagine
+			for(int i = 0; i < structural_element.rows; ++i)
+				for(int j = 0; j < structural_element.cols; ++j)
+					if((int) (input.data[(v+i)*input.cols + (u+j)] * structural_element.data[i*structural_element.cols + j]) == 0)
+						ok = false;
+			
+					
+			if(ok) output.data[(v+1)*output.cols + (u+1)] = max_intensity;
+			else output.data[(v+1)*output.cols + (u+1)] = 0;
+		}
+	}
+}
+
+void opening(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	cv::Mat tmp(output.rows, output.cols, output.type());
+	erosion(input, structural_element, tmp);
+	dilation(tmp, structural_element, output);
+}
+
+void closing(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	cv::Mat tmp(output.rows, output.cols, output.type());
+	dilation(input, structural_element, tmp);
+	erosion(tmp, structural_element, output);
 }
 
 int main(int argc, char **argv)
@@ -87,26 +148,18 @@ int main(int argc, char **argv)
 
 		//////////////////////
 		//processing code here
-		
-		const int DOWNSAMPLE_FACT = 2;
 		                                                                                     
-		cv::Mat output_img(input_img.rows/DOWNSAMPLE_FACT, input_img.cols, CV_8UC3, cv::Scalar(0, 0, 0));
+		cv::Mat dilation_img(input_img.rows, input_img.cols, CV_8UC1);
+		cv::Mat erosion_img(input_img.rows, input_img.cols, CV_8UC1);
+		cv::Mat opening_img(input_img.rows, input_img.cols, CV_8UC1);
+		cv::Mat closing_img(input_img.rows, input_img.cols, CV_8UC1);
 
-		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
-		   (metodo generale)
-		*/
-		for(int v = 0; v < output_img.rows; ++v)
-		{	
-			for(int u = 0;u < output_img.cols; ++u)
-			{
-				for(int k = 0;k < output_img.channels(); ++k) 
-				{	//per ogni pixel dell'immagine di output, copio il pixel corrispondente nell'immagine di input, con righe e colonne moltiplicate per 2
-					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] 
-					= input_img.data[(v*input_img.cols*DOWNSAMPLE_FACT + u)*input_img.channels() + k];
-				}
-			}
-		}
-		
+		cv::Mat structural_element = cv::Mat::ones(3, 3, CV_8UC1);
+
+		dilation(input_img, structural_element, dilation_img);
+		erosion(input_img, structural_element, erosion_img);
+		opening(input_img, structural_element, opening_img);
+		closing(input_img, structural_element, closing_img);
 
 		/////////////////////
 
@@ -114,9 +167,18 @@ int main(int argc, char **argv)
 		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
 		cv::imshow("input_img", input_img);
 
-		//display output_img
-		cv::namedWindow("output_img", cv::WINDOW_NORMAL);
-		cv::imshow("output_img", output_img);
+		//display output images
+		cv::namedWindow("dilation_img", cv::WINDOW_NORMAL);
+		cv::imshow("dilation_img", dilation_img);
+
+		cv::namedWindow("erosion_img", cv::WINDOW_NORMAL);
+		cv::imshow("erosion_img", erosion_img);
+
+		cv::namedWindow("opening_img", cv::WINDOW_NORMAL);
+		cv::imshow("opening_img", opening_img);
+
+		cv::namedWindow("closing_img", cv::WINDOW_NORMAL);
+		cv::imshow("closing_img", closing_img);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
