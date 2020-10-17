@@ -177,14 +177,14 @@ int main(int argc, char **argv)
 		//opening file
 		std::cout<<"Opening "<<frame_name<<std::endl;
 
-		cv::Mat input_img = cv::imread(frame_name, CV_8U); /// toni di grigio
+		cv::Mat input_img = cv::imread(frame_name, CV_8UC1); /// toni di grigio
 		if(input_img.empty())
 		{
 			std::cout<<"Unable to open "<<frame_name<<std::endl;
 			return 1;
 		}
 
-		cv::Mat output_img(input_img.rows,input_img.cols,CV_8U);
+		cv::Mat output_img(input_img.rows,input_img.cols,CV_8UC1);
 
 		// INITIALIZE VARIABLES
 
