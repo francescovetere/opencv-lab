@@ -1,11 +1,13 @@
 /**
- * Caricare l’immagine organs.pgm e applicare una binarizzazione con soglia automatica:
- * 1. Provare tutte le soglie da 1 a 255 
- * 2. Scegliere quella che minimizzi la somma pesata delle varianza all’interno di ogni gruppo (metodo di otsu)
+ * Implementate i metodi di background subtraction di base:
+ * - Frame precedente.
+ * - Media a finestra mobile.
+ * - Media esponenziale.
  * 
- * Attenzione che l’immagine non e’ esattamente bimodale
- * Abbiamo almeno 3 livelli: sfondo, organi e non organi (in realtà anche di piu’)
- * Escludere dal calcolo delle statistiche per la soglia ideale (medie, varianze, ecc.) i punti dello sfondo (<50).
+ * Come cambia il background al variare di k e alfa?
+ * Visualizzate su una finestra il background calcolato.
+ * Partire dall’esempio fornito utilizzando le immagini in Candela.zip:
+ * >simple -i Candela_m1.10_%06d.pgm -t 500 
  */
 
 //OpenCV
@@ -17,10 +19,9 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <climits> // INT_MAX
 
 struct ArgumentList {
-	std::string input_img_name;		    //!< input_img file name
+	std::string image_name;		    //!< image file name
 	int wait_t;                     //!< waiting time
 };
 
@@ -28,11 +29,11 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 
 	if(argc<3 || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help"))
 	{
-		std::cout<<"usage: " << argv[0] << " -i <input_img_name>" <<std::endl;
+		std::cout<<"usage: simple -i <image_name>"<<std::endl;
 		std::cout<<"exit:  type q"<<std::endl<<std::endl;
 		std::cout<<"Allowed options:"<<std::endl<<
 				"   -h	                     produce help message"<<std::endl<<
-				"   -i arg                   input_img name. Use %0xd format for multiple input_imgs."<<std::endl<<
+				"   -i arg                   image name. Use %0xd format for multiple images."<<std::endl<<
 				"   -t arg                   wait before next frame (ms) [default = 0]"<<std::endl<<std::endl<<std::endl;
 		return false;
 	}
@@ -41,7 +42,7 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 	while(i<argc)
 	{
 		if(std::string(argv[i]) == "-i") {
-			args.input_img_name = std::string(argv[++i]);
+			args.image_name = std::string(argv[++i]);
 		}
 
 		if(std::string(argv[i]) == "-t") {
@@ -55,6 +56,11 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 
 	return true;
 }
+
+
+/********************************************************************************************
+ *********************** FUNZIONI DI UTILITA' ***********************************************
+ ********************************************************************************************/
 
 /** Funzione per il calcolo dell'istogramma 
  */
@@ -131,13 +137,13 @@ int otsu_threshold(int* histogram, int levels) {
 
 	// ho gia' calcolato tmp per th = 1, quindi parto da th = 2
 	for(int th = 2; th < levels; ++th) {
-		std::cout << "th: " << th << " ";
+		// std::cout << "th: " << th << " ";
 
 		// tmp è la funzione di otsu data la soglia th attuale: voglio trovare il tmp minimo, e quindi la th migliore
 		tmp = variance(histogram, 0, th)*weight(histogram, 0, th) +
 					variance(histogram, th, levels)*weight(histogram, th, levels);
 		
-		std::cout << "variance: " << tmp << std::endl;
+		// std::cout << "variance: " << tmp << std::endl;
 
 		if(tmp < best_value) {
 			best_value = tmp;
@@ -150,11 +156,29 @@ int otsu_threshold(int* histogram, int levels) {
 }
 
 
+/**
+ * Data img di input e background, calcola foreground come img - background
+ * (tenendo conto di una threshold)
+ */
+void compute_foreground(const cv::Mat& img, const cv::Mat& background, int threshold, cv::Mat& foreground) {
+	for(unsigned int i = 0; i < foreground.rows*foreground.cols*foreground.elemSize(); i += foreground.elemSize()) {
+		int diff = abs(((int)(img.data[i]) - (int)(background.data[i])));
+		if(diff > threshold) foreground.data[i] = diff;
+		else foreground.data[i] = 0;
+	}
+}
+
+/********************************************************************************************/
+
+
+
 int main(int argc, char **argv)
 {
 	int frame_number = 0;
 	char frame_name[256];
 	bool exit_loop = false;
+
+	std::cout<<"Simple program."<<std::endl;
 
 	//////////////////////
 	//parse argument list:
@@ -164,74 +188,66 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	cv::Mat background;
+	cv::Mat foreground;
+	cv::Mat old_img;
+	int threshold;
+
 	while(!exit_loop)
 	{
 		//generating file name
 		//
 		//multi frame case
-		if(args.input_img_name.find('%') != std::string::npos)
-			sprintf(frame_name,(const char*)(args.input_img_name.c_str()),frame_number);
+		if(args.image_name.find('%') != std::string::npos)
+			sprintf(frame_name,(const char*)(args.image_name.c_str()),frame_number);
 		else //single frame case
-			sprintf(frame_name,"%s",args.input_img_name.c_str());
+			sprintf(frame_name,"%s",args.image_name.c_str());
 
 		//opening file
 		std::cout<<"Opening "<<frame_name<<std::endl;
 
-		cv::Mat input_img = cv::imread(frame_name, CV_8UC1); /// toni di grigio
+		cv::Mat input_img= cv::imread(frame_name, CV_8UC1);
 		if(input_img.empty())
 		{
 			std::cout<<"Unable to open "<<frame_name<<std::endl;
 			return 1;
 		}
 
-		cv::Mat output_img(input_img.rows,input_img.cols,CV_8UC1);
 
-		// INITIALIZE VARIABLES
+		//////////////////////
+		//processing code here
 
-		int max_intensity = 256 ;
-		int* histogram = new int[max_intensity];
+		/* Frame precedente */
 
-		for (int i = 0; i< max_intensity; i++){
-			histogram[i] = 0;
+		if(frame_number == 0) { // nel frame 0, mi limito a prendere come background un'immagine nera
+			background = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
+			foreground = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
+		} 
+
+		// dal frame 1 applico la formula: B(n) = Img(n-1) 
+		else {
+			background = old_img.clone();
 		}
 
-		histogram = compute_histogram(input_img, max_intensity);
+		old_img = input_img.clone();
 
-		// for(int i = 0; i < max_intensity; ++i){
-		// 	std::cout << "histogram[" << i << "] = " << histogram[i] << std::endl;
-		// }  
-		
-		// Rimuovo lo sfondo, ovvero i primi 50 livelli
-		for(int i = 0; i < 50; ++i){
-			histogram[i] = 0;
-		}  
-
-		// Calcolo la soglia ideale
-		int threshold = otsu_threshold(histogram, max_intensity);
-
-		std::cout << "\notsu threshold: " << threshold << std::endl;
-
-		// Binarizzo l'immagine con la soglia trovata
-		for(int v = 0; v < output_img.rows; ++v)
-		{	
-			for(int u = 0; u < output_img.cols; ++u)
-			{
-				if((int)input_img.data[(v*input_img.cols + u)] >= threshold)
-					output_img.data[(v*output_img.cols + u)] = max_intensity-1;
-
-				else output_img.data[(v*output_img.cols + u)] = 0;
-			}
+		if(frame_number != 0) {
+			threshold = 255 - otsu_threshold(compute_histogram(input_img, 256), 256);
+			std::cout << threshold << std::endl;
+			compute_foreground(input_img, background, threshold, foreground);
 		}
 
-		//display input_img
+		/////////////////////
+
+		//display
 		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
 		cv::imshow("input_img", input_img);
-	
-		//display output_img
-		cv::namedWindow("output_img", cv::WINDOW_NORMAL);
-		cv::imshow("output_img", output_img);
 
-		cv::imwrite("../../images/binarized-organs.pbm", output_img);
+		cv::namedWindow("background", cv::WINDOW_NORMAL);
+		cv::imshow("background", background);
+
+		cv::namedWindow("foreground", cv::WINDOW_NORMAL);
+		cv::imshow("foreground", foreground);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
