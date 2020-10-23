@@ -168,8 +168,59 @@ void compute_foreground(const cv::Mat& img, const cv::Mat& background, int thres
 	}
 }
 
-/********************************************************************************************/
 
+
+
+/* Metodo 1: Frame precedente */
+void frame_precedente(const cv::Mat& input_img, cv::Mat& old_img, int frame_number, int threshold, cv::Mat& background, cv::Mat& foreground) {
+	if(frame_number == 0) { // nel frame 0, mi limito a prendere come background un'immagine nera
+			background = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
+			foreground = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
+	} 
+
+	// dal frame 1 applico la formula: B(n) = Img(n-1) 
+	else {
+		background = old_img.clone();
+	}
+
+	old_img = input_img.clone();
+
+	if(frame_number != 0) {
+		compute_foreground(input_img, background, threshold, foreground);
+	}
+}
+
+/* Metodo 2: Media a finestra mobile */
+void media_finestra_mobile(const cv::Mat& input_img, int frame_number, int k, std::vector<cv::Mat>& prev_k_frames, int threshold, cv::Mat& background, cv::Mat& foreground) {
+	if(frame_number < k) { // per i primi k frame, mi limito a prendere come background un'immagine nera
+		background = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
+		foreground = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
+		// aggiungo in coda al buffer il nuovo frame, dato dal frame corrente, quindi buffer torna ad avere size = k
+		prev_k_frames.push_back(input_img.clone());
+	} 
+
+	// dal frame k applico la formula
+	else {
+
+		// calcolo la media dei precedenti k frame in una matrice temporanea
+		cv::Mat tmp_avg = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type()); 
+
+		for(int v = 0; v < tmp_avg.rows; ++v)
+			for(int u = 0; u < tmp_avg.cols; ++u)
+				for(unsigned int i = 0; i < prev_k_frames.size(); ++i)
+					tmp_avg.data[u + v*tmp_avg.cols] += prev_k_frames[i].data[u + v*prev_k_frames[i].cols] / k;
+
+		background = tmp_avg.clone();
+
+		// aggiungo in coda al buffer il nuovo frame, dato dal frame corrente, quindi buffer torna ad avere size = k
+		prev_k_frames.push_back(input_img.clone());
+
+		// elimino in testa dal buffer il primo dei k frame
+		prev_k_frames.erase(prev_k_frames.begin());
+
+		compute_foreground(input_img, background, threshold, foreground);
+	}
+}
 
 
 int main(int argc, char **argv)
@@ -188,13 +239,24 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	cv::Mat background;
-	cv::Mat foreground;
-	cv::Mat old_img;
-	int threshold;
 
-	while(!exit_loop)
-	{
+	// dichiarazioni
+	/* Metodo 1: Frame precedente */
+	cv::Mat background_1;
+	cv::Mat foreground_1;
+	cv::Mat old_img_1;
+	int threshold_1 = 50;
+
+	/* Metodo 2: Media a finestra mobile */
+	cv::Mat background_2;
+	cv::Mat foreground_2;
+	int k = 10;
+	int threshold_2 = 20;
+	std::vector<cv::Mat> prev_k_frames;
+
+	/* Metodo 3: Media mobile esponenziale */
+
+	while(!exit_loop) {
 		//generating file name
 		//
 		//multi frame case
@@ -217,25 +279,13 @@ int main(int argc, char **argv)
 		//////////////////////
 		//processing code here
 
-		/* Frame precedente */
+		/* Metodo 1: Frame precedente */
+		frame_precedente(input_img, old_img_1, frame_number, threshold_1, background_1, foreground_1);
 
-		if(frame_number == 0) { // nel frame 0, mi limito a prendere come background un'immagine nera
-			background = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
-			foreground = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
-		} 
-
-		// dal frame 1 applico la formula: B(n) = Img(n-1) 
-		else {
-			background = old_img.clone();
-		}
-
-		old_img = input_img.clone();
-
-		if(frame_number != 0) {
-			threshold = 255 - otsu_threshold(compute_histogram(input_img, 256), 256);
-			std::cout << threshold << std::endl;
-			compute_foreground(input_img, background, threshold, foreground);
-		}
+		/* Metodo 2: Media a finestra mobile */
+		media_finestra_mobile(input_img, frame_number, k, prev_k_frames, threshold_2, background_2, foreground_2);
+			
+		/* Metodo 3: Media mobile esponenziale */
 
 		/////////////////////
 
@@ -243,11 +293,22 @@ int main(int argc, char **argv)
 		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
 		cv::imshow("input_img", input_img);
 
-		cv::namedWindow("background", cv::WINDOW_NORMAL);
-		cv::imshow("background", background);
+		/* Metodo 1: Frame precedente */
+		cv::namedWindow("background_1", cv::WINDOW_NORMAL);
+		cv::imshow("background_1", background_1);
 
-		cv::namedWindow("foreground", cv::WINDOW_NORMAL);
-		cv::imshow("foreground", foreground);
+		cv::namedWindow("foreground_1", cv::WINDOW_NORMAL);
+		cv::imshow("foreground_1", foreground_1);
+
+		/* Metodo 2: Media a finestra mobile */
+		cv::namedWindow("background_2", cv::WINDOW_NORMAL);
+		cv::imshow("background_2", background_2);
+
+		cv::namedWindow("foreground_2", cv::WINDOW_NORMAL);
+		cv::imshow("foreground_2", foreground_2);
+
+		/* Metodo 3: Media mobile esponenziale */
+
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
