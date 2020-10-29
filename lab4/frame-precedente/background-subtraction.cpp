@@ -181,10 +181,13 @@ void frame_precedente(const cv::Mat& input_img, cv::Mat& old_img, int frame_numb
 	// dal frame 1 applico la formula: B(n) = Img(n-1) 
 	else {
 		background = old_img.clone();
-		compute_foreground(input_img, background, threshold, foreground);
 	}
 
 	old_img = input_img.clone();
+
+	if(frame_number != 0) {
+		compute_foreground(input_img, background, threshold, foreground);
+	}
 }
 
 /* Metodo 2: Media a finestra mobile */
@@ -194,7 +197,7 @@ void media_finestra_mobile(const cv::Mat& input_img, int frame_number, int k, st
 		foreground = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
 		// aggiungo in coda al buffer il nuovo frame, dato dal frame corrente, quindi buffer torna ad avere size = k
 		prev_k_frames.push_back(input_img.clone());
-	}
+	} 
 
 	// dal frame k applico la formula
 	else {
@@ -219,26 +222,6 @@ void media_finestra_mobile(const cv::Mat& input_img, int frame_number, int k, st
 	}
 }
 
-/* Metodo 3: Media esponenziale */
-void media_esponenziale_mobile(const cv::Mat& input_img, int frame_number, float alpha, cv::Mat& old_img, cv::Mat& old_background, int threshold, cv::Mat& background, cv::Mat& foreground) {
-	if(frame_number == 0) { // nel frame 0, mi limito a prendere come background un'immagine nera
-		background = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
-		foreground = cv::Mat::zeros(input_img.rows, input_img.cols, input_img.type());
-	}
-
-	// dal frame 1 applico la formula: B(n) = alpha*B(n-1) + (1-alpha)*Img(n-1) 
-	else {
-		for(int v = 0; v < background.rows; ++v)
-			for(int u = 0; u < background.cols; ++u)
-				background.data[u + v*background.cols] = 
-				alpha*old_background.data[u + v*old_background.cols] + (1 - alpha)*old_img.data[u + v*old_img.cols];
-		
-		compute_foreground(input_img, background, threshold, foreground);
-	}
-
-	old_img = input_img.clone();
-	old_background = background.clone();
-}
 
 int main(int argc, char **argv)
 {
@@ -256,6 +239,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+
 	// dichiarazioni
 	/* Metodo 1: Frame precedente */
 	cv::Mat background_1;
@@ -271,12 +255,6 @@ int main(int argc, char **argv)
 	std::vector<cv::Mat> prev_k_frames;
 
 	/* Metodo 3: Media mobile esponenziale */
-	cv::Mat background_3;
-	cv::Mat foreground_3;
-	float alpha = 0.5f;
-	int threshold_3 = 5;
-	cv::Mat old_img_3;
-	cv::Mat old_background_3;
 
 	while(!exit_loop) {
 		//generating file name
@@ -308,7 +286,7 @@ int main(int argc, char **argv)
 		media_finestra_mobile(input_img, frame_number, k, prev_k_frames, threshold_2, background_2, foreground_2);
 			
 		/* Metodo 3: Media mobile esponenziale */
-		media_esponenziale_mobile(input_img, frame_number, alpha, old_img_3, old_background_3, threshold_3, background_3, foreground_3);
+
 		/////////////////////
 
 		//display
@@ -330,11 +308,7 @@ int main(int argc, char **argv)
 		cv::imshow("foreground_2", foreground_2);
 
 		/* Metodo 3: Media mobile esponenziale */
-		cv::namedWindow("background_3", cv::WINDOW_NORMAL);
-		cv::imshow("background_3", background_3);
 
-		cv::namedWindow("foreground_3", cv::WINDOW_NORMAL);
-		cv::imshow("foreground_3", foreground_3);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
