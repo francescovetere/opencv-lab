@@ -61,24 +61,32 @@ void zero_padding(const cv::Mat& input, int padding_size, cv::Mat& output) {
 	}
 }
 
+int max(int a, int b) {if(a >= b) return a; else return b;}
+
 /**
  * ES 1 - Max Pooling
  * Per risolvere il problema dei bordi utilizzo lo zero padding
  */
 void maxPooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
-	// Calcolo le dimensioni del padding 
-	// mi basta dividere la imensione del kernel per 2, e prenderne la parte intera inferiore
-	int padding_size = floor(size / 2);
-	// std::cout << "padding_size: " << padding_size << std::endl;
-
-	// Aggiungo il padding all'immagine, e salvo il risultato in una nuova immagine temporanea
-	cv::Mat padded_image(image.rows + padding_size, image.cols + padding_size, image.type());
-	zero_padding(image, padding_size, padded_image);
-
-	out = padded_image.clone();
+	int padding_size = 0;
 
 	// Calcolo le dimensioni di output
+	int out_rows = floor( (image.rows + 2*padding_size - size)/stride + 1 ); 
+	int out_cols = floor( (image.cols + 2*padding_size - size)/stride + 1 );
 	
+	out.create(out_rows, out_cols, image.type());
+
+	for(int v = 0; v < out.rows-1; ++v) {
+		for(int u = 0; u < out.cols-1; ++u) {
+			int elem1 = image.data[v*out_cols + u];
+			int elem2 = image.data[v*out_cols + u+1];
+			int elem3 = image.data[(v+1)*out_cols + u];
+			int elem4 = image.data[(v+1)*out_cols + u+1];
+			int max_elem = max(elem1, max(elem2, max(elem3, elem4)));
+			out.data[v*out_cols + u] = max_elem;
+		}
+	}
+
 }
 
 int main(int argc, char **argv)
@@ -110,8 +118,8 @@ int main(int argc, char **argv)
 		//opening file
 		std::cout<<"Opening "<<frame_name<<std::endl;
 
-		// leggo l'immagine di input in un cv::Mat
-		cv::Mat input_img = cv::imread(frame_name);
+		// leggo l'immagine di input in un cv::Mat, in toni di grigio
+		cv::Mat input_img = cv::imread(frame_name, CV_8UC1);
 		if(input_img.empty()) {
 			std::cout<<"Unable to open "<<frame_name<<std::endl;
 			return 1;
