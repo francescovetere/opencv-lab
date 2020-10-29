@@ -100,7 +100,7 @@ int main(int argc, char **argv)
 				for(int k = 0;k < output_img.channels(); ++k) 
 				{	// flip orizzontale: in input_img, mi sposto dell'offset opposto a quello in cui mi trovo ora
 					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] 
-					= input_img.data[(v*input_img.cols + (input_img.cols - u))*input_img.channels() + k];
+					= input_img.data[(v*input_img.cols + (input_img.cols - u - 1))*input_img.channels() + k];
 				}
 			}
 		}

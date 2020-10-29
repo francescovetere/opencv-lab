@@ -1,0 +1,64 @@
+castare puntatore al tipo di dato
+usare aritmetica puntatori, ma fare + 2 significherà spostarsi di 2 blocchi (se casto a float, mi sposto i 2x4=8 byte)
+
+===
+es2: *elemSize1() alla fine, nell'accesso nel for
+===
+
+===
+es5: - 1 alla fine di input_img.cols - u, analogo per es6 sulle righe
+===
+
+my_matrix.setTo(0) // mi mette tutti gli elem a 0
+
+===
+es7bis:
+aggiungo controlli
+if((r + width < image.rows - 1) && (c + height < image.cols))
+
+nel for, nell'input: r + width, c + height, il resto è uguale
+
+===
+es8:
+aggiunge un *2 sulle dimensioni di output
+r - padding e c - padding nell'img input, e basta
+===
+
+===
+es9:
+vettore di vettori dei top-left dei 4 blocchi, cosi poi uso std::srand e std::random_shuffle
+
+poi ciclo sui blocchi 
+===
+
+===
+erosion/dilation
+
+guardare: cv::mul, cv::Rect, cv::threshold, cv::operator()
+===
+
+===
+bg subtraction
+usa <unistd.h> per la getopt (dove ho : significa che argomento prende parametro, tipo h non ne prende)
+while((c = getopt /argc, argv, "hi:t:k:")) != -1)
+switch(c) {
+    case 'i':
+        ...
+    ...
+    case 'h':
+}
+
+image.convertTo(fg, CV_16SC1);
+m_pframe_bg.convertTo(bg, CV_16SC1);
+cv::threshold(cv::abs(fg - bg), fg, args.threshold, 255, cv::THRESH_BINARY)
+
+
+n.b.: immagini CV_32FC1 0 nero 1 bianco? rivedere
+
+per fare media:
+cv::accumulate(*ii, bgf); // solo se bgf è CV_32FC1 o CV_64FC1 
+
+e poi alla fine
+
+bgf /= m_pframe_bg.size();
+===

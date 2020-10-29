@@ -87,7 +87,10 @@ int main(int argc, char **argv)
 
 		//////////////////////
 		//processing code here
-		,
+		
+		const int DOWNSAMPLE_FACT = 2;
+		                                                                                     
+		cv::Mat output_img(input_img.rows/DOWNSAMPLE_FACT, input_img.cols/DOWNSAMPLE_FACT, CV_8UC3, cv::Scalar(0, 0, 0));
 
 
 		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
@@ -99,8 +102,8 @@ int main(int argc, char **argv)
 			{
 				for(int k = 0;k < output_img.channels(); ++k) 
 				{	//per ogni pixel dell'immagine di output, copio il pixel corrispondente nell'immagine di input, con righe e colonne moltiplicate per 2
-					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] 
-					= input_img.data[(v*input_img.cols*DOWNSAMPLE_FACT + u*DOWNSAMPLE_FACT)*input_img.channels() + k];
+					output_img.data[((v*output_img.cols + u)*output_img.channels() + k)*output_img.elemSize1()];  
+					= input_img.data[((v*input_img.cols*DOWNSAMPLE_FACT + u*DOWNSAMPLE_FACT)*input_img.channels() + k)*input_img.elemSize1()];
 				}
 			}
 		}
