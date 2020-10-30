@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <numeric> // std::accumulate()
+#include <algorithm>
 
 struct ArgumentList {
 	std::string image_name;		    //!< image file name
@@ -219,7 +220,8 @@ void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int st
 						float current_pixel = 
 						(float)image.data[(((r+r_kernel)*image.cols + (c+c_kernel))*image.channels() + k)*image.elemSize1()]
 						*
-						(float)kernel.at<float>(r_kernel, c_kernel);
+						(*((float*) &kernel.data[((r_kernel*kernel.cols + c_kernel)*kernel.channels() + k)*kernel.elemSize1()]));
+						// (float)kernel.at<float>(r_kernel, c_kernel);
 
 						// std::cout << (float)kernel.at<float>(r_kernel, c_kernel) << " * " <<
 						// (float)image.data[(((r+r_kernel)*image.cols + (c+c_kernel))*image.channels() + k)*image.elemSize1()] << " = " <<
@@ -233,18 +235,26 @@ void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int st
 
 				float sum_val = std::accumulate(convolution_window.begin(), convolution_window.end(), 0.0f);
 				
+				// std::cout << "\n\t";
+				// std::for_each(convolution_window.begin(), convolution_window.end(), [](const float& x){std::cout << x << " ";});
+				// std::cout << " = " << sum_val << "\n";
+
 				// svuoto il vector per la window successiva 
 				convolution_window.clear();
 
 				// accedo all'output usando gli appositi indici, dichiarati prima dei for
-				out.data[((current_out_r*out.cols + current_out_c)*out.channels() + k)*out.elemSize1()] = sum_val;
+				*((float*) &out.data[((current_out_r*out.cols + current_out_c)*out.channels() + k)*out.elemSize1()]) = sum_val;
+				// out.at<float>(current_out_r, current_out_c) = sum_val;
+				// std::cout << "out.data[" << (float)((current_out_r*out.cols + current_out_c)*out.channels() + k)*out.elemSize1() << "] = " << sum_val << std::endl;
+
 			}
 		}
 	}
 
-	std::cout << out_rows << " " << out_cols << std::endl;
-	std::cout << current_out_r << " " << current_out_c << std::endl;
+	// std::cout << out_rows << " " << out_cols << std::endl;
+	// std::cout << current_out_r << " " << current_out_c << std::endl;
 }
+
 
 
 int main(int argc, char **argv) {
@@ -332,18 +342,13 @@ int main(int argc, char **argv) {
 		// 		for(int c_kernel = 0; c_kernel < kernel.cols; ++c_kernel)
 		// 			std::cout << (float)kernel.at<float>(r_kernel, c_kernel);
 		// 			// std::cout << (float)kernel.data[(r_kernel*kernel.cols + c_kernel)*kernel.elemSize1()] << " ";
-					
-		
-
+			
 		int stride_conv_float = 3;
 
 		// dichiaro la matrice contenente il risultato della convFloat()
 		// (il suo dimensionamento è gestito direttamente nella funzione convFloat())
 		cv::Mat out_conv_float;
 		convFloat(input_img, kernel, out_conv_float, stride_conv_float);
-
-		std::cout << out_conv_float << std::endl;
-
 		/////////////////////
 
 		// display input_img
