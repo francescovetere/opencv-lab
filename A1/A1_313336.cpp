@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 #include <numeric> // std::accumulate()
-#include <algorithm>
 
 struct ArgumentList {
 	std::string image_name;		    //!< image file name
@@ -49,7 +48,13 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 }
 
 
-/*** FUNZIONI DI UTILITA'***/
+/****************************/
+/* FUNZIONI DI UTILITA' */
+
+/**
+ * Zero padding
+ * aggiunge alla matrice di input una cornice di 0 di dimensione padding_size, e mette risultato in una matrice di output
+ */
 void zero_padding(const cv::Mat& input, int padding_size, cv::Mat& output) {
 	output = cv::Mat::zeros(input.rows + 2*padding_size, input.cols + 2*padding_size, input.type());
 
@@ -62,6 +67,41 @@ void zero_padding(const cv::Mat& input, int padding_size, cv::Mat& output) {
 		}
 	}
 }
+
+/**
+ * Contrast stretching
+ * Riporta i valori della matrice di input tra [range_min, range_max], e mette il risultato in una matrice di output
+ * In generale, contrast_and_gain(r, c) = a*f(r, c) + b
+ * contrast_stretching ne è un caso particolare in cui:
+ * a = 255 / max(f) - min(f)
+ * b = (255 * min(f)) / max(f) - min(f)
+ */
+void contrast_stretching(const cv::Mat& input, cv::Mat& output) {
+	double min_pixel, max_pixel;
+	cv::minMaxLoc(input, &min_pixel, &max_pixel);
+	
+	// std::cout << min_pixel << ", " << max_pixel << std::endl; 
+
+	float a = (float) 255 / (max_pixel - min_pixel);
+	float b = (float) -1 * (255 * min_pixel) / (max_pixel - min_pixel);
+	
+	output.create(input.rows, input.cols, CV_8UC1);
+
+	for(int r = 0; r < input.rows; ++r) {
+		for(int c = 0; c < input.cols; ++c) {
+			for(int k = 0; k < output.channels(); ++k) {
+				float pixel_input = *((float*) &(input.data[((r*input.cols + c)*input.channels() + k)*input.elemSize1()]));
+				float stretched_pixel_input = a*pixel_input + b;
+				output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()] = (u_int8_t) stretched_pixel_input;
+			}
+		}
+	}
+
+}
+
+/***************************/
+
+
 
 /**
  * ES 1 - Max Pooling
@@ -119,6 +159,8 @@ void maxPooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
 		}
 	}
 }
+
+
 
 /**
  * ES 2 - Average Pooling
@@ -181,6 +223,8 @@ void averagePooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
 	}
 }
 
+
+
 /**
  * ES 3 - Convoluzione float
  */
@@ -204,55 +248,57 @@ void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int st
 
 	// 3 cicli per posizionarmi su ogni pixel dell'immagine di input, muovendomi di un passo pari alla stride
 	for(int r = 0; r <= image.rows-std::max(kernel.rows, stride); r+=stride) {
+		
 		// ad ogni riga dell'immagine di input, incremento la riga corrente sull'output, riazzerando la colonna corrente sull'output!
 		++current_out_r;
 		current_out_c = -1;
+		
 		for(int c = 0; c <= image.cols-std::max(kernel.cols, stride); c+=stride) {
+
 			// ad ogni colonna dell'immagine di input, incremento la colonna corrente sull'output
 			++current_out_c;
 
 			for(int k = 0; k < out.channels(); ++k) {
+
 				// 2 cicli per analizzare ogni pixel dell'attuale kernel
 				for(int r_kernel = 0; r_kernel < kernel.rows; ++r_kernel) {
 					for(int c_kernel = 0; c_kernel < kernel.cols; ++c_kernel) {
 				
-						// eseguo la somma di prodotti
-						float current_pixel = 
-						(float)image.data[(((r+r_kernel)*image.cols + (c+c_kernel))*image.channels() + k)*image.elemSize1()]
-						*
-						(*((float*) &kernel.data[((r_kernel*kernel.cols + c_kernel)*kernel.channels() + k)*kernel.elemSize1()]));
-						// (float)kernel.at<float>(r_kernel, c_kernel);
-
-						// std::cout << (float)kernel.at<float>(r_kernel, c_kernel) << " * " <<
-						// (float)image.data[(((r+r_kernel)*image.cols + (c+c_kernel))*image.channels() + k)*image.elemSize1()] << " = " <<
-						// current_pixel << std::endl;
+						// eseguo la somma di prodotti tra pixel sull'immagine e pixel sul kernel
+						float image_pixel = image.data[(((r+r_kernel)*image.cols + (c+c_kernel))*image.channels() + k)*image.elemSize1()];
+						// il kernel è CV_32FC1: devo ricordarmi di castare il puntatore verso un float*, e solo successivamente prenderne l'elemento puntato
+						float kernel_pixel = *((float*) &kernel.data[((r_kernel*kernel.cols + c_kernel)*kernel.channels() + k)*kernel.elemSize1()]);
 						
-						// inserisco il pixel corrente nel vettore che identifica il kernel attuale
-						// std::cout << current_pixel << " ";
+						float current_pixel = image_pixel*kernel_pixel;	
+
 						convolution_window.push_back(current_pixel);
 					}
 				}
 
 				float sum_val = std::accumulate(convolution_window.begin(), convolution_window.end(), 0.0f);
-				
-				// std::cout << "\n\t";
-				// std::for_each(convolution_window.begin(), convolution_window.end(), [](const float& x){std::cout << x << " ";});
-				// std::cout << " = " << sum_val << "\n";
 
 				// svuoto il vector per la window successiva 
 				convolution_window.clear();
 
-				// accedo all'output usando gli appositi indici, dichiarati prima dei for
+				// accedo all'immagine di output usando gli appositi indici, dichiarati prima dei for
+				// l'output è CV_32FC1: devo ricordarmi di castare il puntatore verso un float*, e solo successivamente prenderne l'elemento puntato
 				*((float*) &out.data[((current_out_r*out.cols + current_out_c)*out.channels() + k)*out.elemSize1()]) = sum_val;
-				// out.at<float>(current_out_r, current_out_c) = sum_val;
-				// std::cout << "out.data[" << (float)((current_out_r*out.cols + current_out_c)*out.channels() + k)*out.elemSize1() << "] = " << sum_val << std::endl;
 
 			}
 		}
 	}
+}
 
-	// std::cout << out_rows << " " << out_cols << std::endl;
-	// std::cout << current_out_r << " " << current_out_c << std::endl;
+
+
+/**
+ * ES 4 - Convoluzione intera
+ */
+void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
+	cv::Mat convfloat_out;
+	convFloat(image, kernel, convfloat_out, stride);
+
+	contrast_stretching(convfloat_out, out);
 }
 
 
@@ -326,29 +372,41 @@ int main(int argc, char **argv) {
 		/****************************
 		 *********** ES3 ************
 		 ***************************/
-		// scelgo le dimensioni di size e stride per effettuare l'average pooling
-		int kernel_rows = 3;
-		int kernel_cols = 3;
-		float kernel_data[kernel_rows*kernel_cols] = {1, 0, -1,
-													  2, 0, -2,
-													  1, 0, -1};
+		int kernel_convfloat_rows = 3;
+		int kernel_convfloat_cols = 3;
+		float kernel_convfloat_data[] { 1, 0, -1,
+								 	    2, 0, -2,
+								 	    1, 0, -1 };
 
-		cv::Mat kernel(kernel_rows, kernel_cols, CV_32FC1, kernel_data);
+		cv::Mat kernel_convfloat(kernel_convfloat_rows, kernel_convfloat_cols, CV_32FC1, kernel_convfloat_data);
 
-		// std::cout << kernel << std::endl;
-
-
-		// for(int r_kernel = 0; r_kernel < kernel.rows; ++r_kernel)
-		// 		for(int c_kernel = 0; c_kernel < kernel.cols; ++c_kernel)
-		// 			std::cout << (float)kernel.at<float>(r_kernel, c_kernel);
-		// 			// std::cout << (float)kernel.data[(r_kernel*kernel.cols + c_kernel)*kernel.elemSize1()] << " ";
-			
-		int stride_conv_float = 3;
+		int stride_convfloat = 3;
 
 		// dichiaro la matrice contenente il risultato della convFloat()
 		// (il suo dimensionamento è gestito direttamente nella funzione convFloat())
-		cv::Mat out_conv_float;
-		convFloat(input_img, kernel, out_conv_float, stride_conv_float);
+		cv::Mat out_convfloat;
+		convFloat(input_img, kernel_convfloat, out_convfloat, stride_convfloat);
+
+
+
+		/***************************
+		*********** ES4 ************
+		****************************/
+		int kernel_conv_rows = 3;
+		int kernel_conv_cols = 3;
+		float kernel_conv_data[] { 1, 0, -1,
+								   2, 0, -2,
+								   1, 0, -1 };
+
+		cv::Mat kernel_conv(kernel_conv_rows, kernel_conv_cols, CV_32FC1, kernel_conv_data);
+	
+		int stride_conv = 1;
+
+		// dichiaro la matrice contenente il risultato della conv()
+		// (il suo dimensionamento è gestito direttamente nella funzione conv())
+		cv::Mat out_conv;
+		conv(input_img, kernel_conv, out_conv, stride_conv);
+
 		/////////////////////
 
 		// display input_img
@@ -363,9 +421,13 @@ int main(int argc, char **argv) {
 		cv::namedWindow("out_avg_pooling", cv::WINDOW_NORMAL);
 		cv::imshow("out_avg_pooling", out_avg_pooling);
 
-		// display out_conv_float
-		cv::namedWindow("out_conv_float", cv::WINDOW_NORMAL);
-		cv::imshow("out_conv_float", out_conv_float);
+		// display out_convfloat
+		cv::namedWindow("out_convfloat", cv::WINDOW_NORMAL);
+		cv::imshow("out_convfloat", out_convfloat);
+
+		// display out_conv
+		cv::namedWindow("out_conv", cv::WINDOW_NORMAL);
+		cv::imshow("out_conv", out_conv);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
