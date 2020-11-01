@@ -7,8 +7,10 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <vector>
-#include <numeric> // std::accumulate()
+#include <vector>   	// std::vector
+#include <algorithm>	// std::for_each
+#include <numeric>  	// std::accumulate
+#include <cmath> 		// M_PI, sqrt(), pow()
 
 struct ArgumentList {
 	std::string image_name;		    //!< image file name
@@ -303,6 +305,39 @@ void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride 
 
 
 
+/**
+ * ES 5 - Kernel di un blur gaussiano orizzontale
+ */
+void gaussianKernel(float sigma, int radius, cv::Mat& kernel) {
+	// dimensionamento del kernel
+	int kernel_rows = 1;
+	int kernel_cols = (radius*2) + 1;
+	
+	kernel.create(kernel_rows, kernel_cols, CV_32FC1);
+	
+	// dichiaro un vettore che conterrà i valori calcolati nel ciclo for
+	std::vector<float> kernel_values;
+
+	// riempimento del kernel, tramite la formula della gaussiana orizzontale
+	for(int c = 0; c < kernel_cols; ++c) {
+		float gaussian_c = exp(-1*pow(c-radius, 2) / (2*pow(sigma, 2))) / sqrt(2*M_PI*pow(sigma, 2));
+		kernel_values.push_back(gaussian_c);
+	}
+
+	// calcolo la somma dei valori trovati
+	float sum = std::accumulate(kernel_values.begin(), kernel_values.end(), 0.0f);
+
+	// normalizzo i valori trovati, dividendo ciascuno per sum
+	for(int c = 0; c < kernel_cols; ++c) kernel_values[c] /= sum;
+
+	// assegno ad ogni pixel del kernel il suo valore finale
+	for(int c = 0; c < kernel_cols; ++c) {
+		*((float *) &kernel.data[c*kernel.elemSize1()]) = kernel_values[c];
+	}
+}
+
+
+
 int main(int argc, char **argv) {
 	int frame_number = 0;
 	char frame_name[256];
@@ -407,12 +442,35 @@ int main(int argc, char **argv) {
 		cv::Mat out_conv;
 		conv(input_img, kernel_conv, out_conv, stride_conv);
 
+
+
+		/***************************
+		*********** ES6 ************
+		****************************/
+		cv::Mat kernel_gauss_horizontal;
+		cv::Mat kernel_gauss_vertical;
+		int kernel_gauss_radius = 5;
+
+		cv::Mat out_gauss_horizontal;
+		cv::Mat out_gauss_vertical;
+		cv::Mat out_gauss_2D;
+
+		int stride_gauss = 1;
+
+		gaussianKernel(20.0f, kernel_gauss_radius, kernel_gauss_horizontal);
+
+		conv(input_img, kernel_gauss_horizontal, out_gauss_horizontal, stride_gauss);
+
+		cv::transpose(kernel_gauss_horizontal, kernel_gauss_vertical);
+		conv(input_img, kernel_gauss_vertical, out_gauss_vertical, stride_gauss);
+
+		conv(out_gauss_horizontal, kernel_gauss_vertical, out_gauss_2D, stride_gauss);
 		/////////////////////
 
 		// display input_img
 		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
 		cv::imshow("input_img", input_img);
-		
+
 		// display out_max_pooling
 		cv::namedWindow("out_max_pooling", cv::WINDOW_NORMAL);
 		cv::imshow("out_max_pooling", out_max_pooling);
@@ -428,6 +486,18 @@ int main(int argc, char **argv) {
 		// display out_conv
 		cv::namedWindow("out_conv", cv::WINDOW_NORMAL);
 		cv::imshow("out_conv", out_conv);
+
+		// display out_gauss_horizontal
+		cv::namedWindow("out_gauss_horizontal", cv::WINDOW_NORMAL);
+		cv::imshow("out_gauss_horizontal", out_gauss_horizontal);
+
+		// display out_gauss_vertical
+		cv::namedWindow("out_gauss_vertical", cv::WINDOW_NORMAL);
+		cv::imshow("out_gauss_vertical", out_gauss_vertical);
+		
+		// display out_gauss_2D
+		cv::namedWindow("out_gauss_2D", cv::WINDOW_NORMAL);
+		cv::imshow("out_gauss_2D", out_gauss_2D);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
