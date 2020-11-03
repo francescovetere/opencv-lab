@@ -55,29 +55,16 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 
 /**
  * Zero padding
- * aggiunge alla matrice di input una cornice di zeri, di dimensione padding_size, e mette il risultato in una matrice di output
+ * aggiunge alla matrice di input una cornice di 0 di dimensione padding_size, e mette risultato in una matrice di output
  */
-// void zero_padding(const cv::Mat& input, int padding_size, cv::Mat& output) {
-// 	output = cv::Mat::zeros(input.rows + 2*padding_size, input.cols + 2*padding_size, input.type());
+void zero_padding(const cv::Mat& input, int padding_size, cv::Mat& output) {
+	output = cv::Mat::zeros(input.rows + 2*padding_size, input.cols + 2*padding_size, input.type());
 
-// 	for(int v = padding_size; v < output.rows-padding_size; ++v) {
-// 		for(int u = padding_size; u < output.cols-padding_size; ++u) {
-// 			for(int k = 0; k < output.channels(); ++k) {	
-// 				output.data[((v*output.cols + u)*output.channels() + k)*output.elemSize1()]
-// 				= input.data[(((v-padding_size)*input.cols + (u-padding_size))*input.channels() + k)*input.elemSize1()];
-// 			}
-// 		}
-// 	}
-// }
-
-void zero_padding(const cv::Mat& input, int padding_rows, int padding_cols, cv::Mat& output) {
-	output = cv::Mat::zeros(input.rows + 2*padding_rows, input.cols + 2*padding_cols, input.type());
-
-	for(int v = padding_rows; v < output.rows-padding_rows; ++v) {
-		for(int u = padding_cols; u < output.cols-padding_cols; ++u) {
+	for(int v = padding_size; v < output.rows-padding_size; ++v) {
+		for(int u = padding_size; u < output.cols-padding_size; ++u) {
 			for(int k = 0; k < output.channels(); ++k) {	
 				output.data[((v*output.cols + u)*output.channels() + k)*output.elemSize1()]
-				= input.data[(((v-padding_rows)*input.cols + (u-padding_cols))*input.channels() + k)*input.elemSize1()];
+				= input.data[(((v-padding_size)*input.cols + (u-padding_size))*input.channels() + k)*input.elemSize1()];
 			}
 		}
 	}
@@ -97,20 +84,17 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output) {
 	
 	// std::cout << min_pixel << ", " << max_pixel << std::endl; 
 
-	float a = (float) (255 / (max_pixel - min_pixel));
-	float b = (float) (-1 * ((255 * min_pixel) / (max_pixel - min_pixel)));
+	float a = (float) 255 / (max_pixel - min_pixel);
+	float b = (float) -1 * (255 * min_pixel) / (max_pixel - min_pixel);
 	
 	output.create(input.rows, input.cols, CV_8UC1);
 
 	for(int r = 0; r < input.rows; ++r) {
 		for(int c = 0; c < input.cols; ++c) {
-			for(int k = 0; k < input.channels(); ++k) {
+			for(int k = 0; k < output.channels(); ++k) {
 				float pixel_input = *((float*) &(input.data[((r*input.cols + c)*input.channels() + k)*input.elemSize1()]));
-				// float stretched_pixel_input = ((pixel_input - min_pixel) / (max_pixel - min_pixel))*255;
 				float stretched_pixel_input = a*pixel_input + b;
-
-				// std::cout << (float)a << " " << (float)b << " " << (float)stretched_pixel_input << std::endl;
-				output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()] = (uchar) stretched_pixel_input;
+				output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()] = (u_int8_t) stretched_pixel_input;
 			}
 		}
 	}
@@ -118,13 +102,16 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output) {
 }
 
 /***************************/
+
+
+
 /**
  * ES 1 - Max Pooling
- * Per risolvere il problema dei bordi, eseguo uno zero-padding al termine del calcolo
- * (In questo modo, riporto l'output ad avere la stessa dimensione dell'input)
+ * Per risolvere il problema dei bordi, eseguo il max pooling 
+ * partendo con il vertice top-left della finestra in (0,0)
  */
 void maxPooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
-	int padding_size = 0; // inizialmente lavoro senza padding, lo aggiungo al termine
+	int padding_size = 0;
 
 	// Calcolo le dimensioni di output (formula tratta dalle slide di teoria)
 	int out_rows = floor((image.rows + 2*padding_size - size)/stride + 1);
@@ -173,25 +160,17 @@ void maxPooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
 			}
 		}
 	}
-
-	// padding finale per riottenere le dimensioni di input
-	padding_size = floor((image.rows - out.rows)/2);
-
-	cv::Mat padded_out;
-	zero_padding(out, padding_size, padding_size, padded_out);
-
-	out = padded_out.clone();
 }
 
 
 
 /**
  * ES 2 - Average Pooling
- * Per risolvere il problema dei bordi, eseguo uno zero-padding al termine del calcolo
- * (In questo modo, riporto l'output ad avere la stessa dimensione dell'input)
+ * Per risolvere il problema dei bordi, eseguo l'average pooling 
+ * partendo con il vertice top-left della finestra in (0,0)
  */
 void averagePooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
-	int padding_size = 0; // inizialmente lavoro senza padding, lo aggiungo al termine
+	int padding_size = 0;
 
 	// Calcolo le dimensioni di output (formula tratta dalle slide di teoria)
 	int out_rows = floor((image.rows + 2*padding_size - size)/stride + 1);
@@ -244,25 +223,15 @@ void averagePooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
 			}
 		}
 	}
-
-	// padding finale per riottenere le dimensioni di input
-	padding_size = floor((image.rows - out.rows)/2);
-
-	cv::Mat padded_out;
-	zero_padding(out, padding_size, padding_size, padded_out);
-
-	out = padded_out.clone();
 }
 
 
 
 /**
  * ES 3 - Convoluzione float
- * Per risolvere il problema dei bordi, eseguo uno zero-padding al termine del calcolo
- * (In questo modo, riporto l'output ad avere la stessa dimensione dell'input)
  */
 void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
-	int padding_size = 0; // inizialmente lavoro senza padding, lo aggiungo al termine
+	int padding_size = 0;
 
 	// Calcolo le dimensioni di output (formula tratta dalle slide di teoria)
 	int out_rows = floor((image.rows + 2*padding_size - kernel.rows)/stride + 1);
@@ -326,22 +295,12 @@ void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int st
 
 /**
  * ES 4 - Convoluzione intera
- * Richiamo la convoluzione float, e successivamente riporto i valori in un range 0-255 con un contrast stretching
  */
 void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
 	cv::Mat convfloat_out;
 	convFloat(image, kernel, convfloat_out, stride);
 
 	contrast_stretching(convfloat_out, out);
-
-	// padding finale per riottenere le dimensioni di input
-	int padding_rows = floor((image.rows - out.rows)/2);
-	int padding_cols = floor((image.cols - out.cols)/2);
-
-	cv::Mat padded_out;
-	zero_padding(out, padding_rows, padding_cols, padded_out);
-
-	out = padded_out.clone();
 }
 
 
@@ -375,70 +334,6 @@ void gaussianKernel(float sigma, int radius, cv::Mat& kernel) {
 	for(int c = 0; c < kernel_cols; ++c) {
 		*((float *) &kernel.data[c*kernel.elemSize1()]) = kernel_values[c];
 	}
-}
-
-
-
-/**
- * ES 7 - Magnitudo e orientazione di Sobel 3x3
- */
-void sobel(const cv::Mat& image, cv::Mat& magnitude, cv::Mat& orientation) {
-	// applico una convoluzione di image con Sobel orizzontale e Sobel verticale
-	// ottenendo quindi l'immagine di input derivata nelle due direzioni
-
-	// creo i due filtri di Sobel
-	int sobel_size = 3;
-
-	float sobel_x_data[] { 1,  2,  1,
-						   0,  0,  0,
-						  -1, -2, -1 };
-
-	cv::Mat kernel_sobel_x(sobel_size, sobel_size, CV_32FC1, sobel_x_data);
-
-	float sobel_y_data[] { 1, 0, -1,
-						   2, 0, -2,
-						   1, 0, -1 };
-
-	cv::Mat kernel_sobel_y(sobel_size, sobel_size, CV_32FC1, sobel_y_data);
-
-	// applico le convoluzioni
-	cv::Mat derivative_x;
-	cv::Mat derivative_y;
-
-	convFloat(image, kernel_sobel_x, derivative_x);
-	convFloat(image, kernel_sobel_y, derivative_y);
-
-	// ora applico le formule per il calcolo di magnitudo e orientazione
-	// magnitudo = sqrt( (df/dx)^2 + (df/dy)^2 )
-	// orientazione = arctan( (df/dy) / (df/dx) )
-
-	magnitude.create(image.rows, image.cols, CV_32FC1);
-	orientation.create(image.rows, image.cols, CV_32FC1);
-
-	for(int r = 0; r < image.rows; ++r) {
-		for(int c = 0; c < image.cols; ++c) {
-				float current_derivative_x = *((float*) &(derivative_x.data[(r*derivative_x.cols + c)*derivative_x.elemSize()]));
-				float current_derivative_y = *((float*) &(derivative_y.data[(r*derivative_y.cols + c)*derivative_y.elemSize()]));
-
-				*((float*) &(magnitude.data[(r*magnitude.cols + c)*magnitude.elemSize()])) 
-				= sqrt(pow(current_derivative_x, 2) + pow(current_derivative_y, 2));
-
-				// *((float*) &(orientation.data[(r*orientation.cols + c)*orientation.elemSize()])) 
-				// = atan(current_derivative_y / current_derivative_x);
-
-				// if(atan(current_derivative_y / current_derivative_x) < 0)
-				// 	*((float *) &orientation.data[(r * orientation.cols + c)*orientation.elemSize()]) += (2 * M_PI);
-		}
-	}
-
-	// // effettuo un contrast stretching per riportarmi a valori visualizzabili (0-255)
-	// cv::Mat magnitude_tmp;
-	// contrast_stretching(magnitude, magnitude_tmp);
-	// magnitude = magnitude_tmp.clone();
-
-	// cv::Mat orientation_tmp;
-	// contrast_stretching(orientation, orientation_tmp);
-	// orientation = orientation_tmp.clone();
 }
 
 
@@ -485,33 +380,28 @@ int main(int argc, char **argv) {
 		 *********** ES1 ************
 		 ***************************/
 		// scelgo le dimensioni di size e stride per effettuare il max pooling
-		int size_max_pooling = 3;
-		int stride_max_pooling = 1;
+		int size_max_pooling = 6;
+		int stride_max_pooling = 3;
 
 		// dichiaro la matrice contenente il risultato del max pooling
 		// (il suo dimensionamento è gestito direttamente nella funzione maxPooling())
 		cv::Mat out_max_pooling;
 		maxPooling(input_img, size_max_pooling, stride_max_pooling, out_max_pooling);
 
-		std::cout << "input: " << input_img.rows << " " << input_img.cols << std::endl;
-		std::cout << "output max pooling: " << out_max_pooling.rows << " " << out_max_pooling.cols << std::endl;
-
-
-
+		
+		
 		/****************************
 		 *********** ES2 ************
 		 ***************************/
 		// scelgo le dimensioni di size e stride per effettuare l'average pooling
-		int size_avg_pooling = 3;
-		int stride_avg_pooling = 1;
+		int size_avg_pooling = 6;
+		int stride_avg_pooling = 3;
 
 		// dichiaro la matrice contenente il risultato dell'average pooling
 		// (il suo dimensionamento è gestito direttamente nella funzione averagePooling())
 		cv::Mat out_avg_pooling;
 		averagePooling(input_img, size_avg_pooling, stride_avg_pooling, out_avg_pooling);
 
-		std::cout << "input: " << input_img.rows << " " << input_img.cols << std::endl;
-		std::cout << "output avg pooling: " << out_avg_pooling.rows << " " << out_avg_pooling.cols << std::endl;
 
 
 		/****************************
@@ -525,7 +415,7 @@ int main(int argc, char **argv) {
 
 		cv::Mat kernel_convfloat(kernel_convfloat_rows, kernel_convfloat_cols, CV_32FC1, kernel_convfloat_data);
 
-		int stride_convfloat = 1;
+		int stride_convfloat = 3;
 
 		// dichiaro la matrice contenente il risultato della convFloat()
 		// (il suo dimensionamento è gestito direttamente nella funzione convFloat())
@@ -552,102 +442,63 @@ int main(int argc, char **argv) {
 		cv::Mat out_conv;
 		conv(input_img, kernel_conv, out_conv, stride_conv);
 
-		// std::cout << "input: " << input_img.rows << " " << input_img.cols << std::endl;
-		// std::cout << "output conv: " << out_conv.rows << " " << out_conv.cols << std::endl;
+
 
 		/***************************
 		*********** ES6 ************
 		****************************/
 		cv::Mat kernel_gauss_horizontal;
 		cv::Mat kernel_gauss_vertical;
-		int kernel_gauss_radius = 3;
+		int kernel_gauss_radius = 5;
 
 		cv::Mat out_gauss_horizontal;
 		cv::Mat out_gauss_vertical;
 		cv::Mat out_gauss_2D;
-		
+
 		int stride_gauss = 1;
 
 		gaussianKernel(20.0f, kernel_gauss_radius, kernel_gauss_horizontal);
-		// std::cout << kernel_gauss_horizontal << std::endl;
 
-		// avrò padding solo a sinistra e a destra
 		conv(input_img, kernel_gauss_horizontal, out_gauss_horizontal, stride_gauss);
 
 		cv::transpose(kernel_gauss_horizontal, kernel_gauss_vertical);
-		// avrò padding solo in alto e in basso
 		conv(input_img, kernel_gauss_vertical, out_gauss_vertical, stride_gauss);
 
-		// per ottenere il blur gaussiano 2D, parto dal blur gaussiano orizzontale
-		// e ne calcolo la convoluzione con il kernel gaussiano verticale
-		// avrò padding su tutti e 4 i lati
 		conv(out_gauss_horizontal, kernel_gauss_vertical, out_gauss_2D, stride_gauss);
-				
-		// std::cout << out_gauss_horizontal.rows << ", " << out_gauss_horizontal.cols << std::endl;
-		// std::cout << out_gauss_vertical.rows << ", " << out_gauss_vertical.cols << std::endl;
-		// std::cout << out_gauss_2D.rows << ", " << out_gauss_2D.cols << std::endl;
-
-
-
-		/***************************
-		*********** ES7 ************
-		****************************/
-		cv::Mat magnitude;
-		cv::Mat orientation;
-
-		sobel(input_img, magnitude, orientation);
-
-		cv::Mat magnitude_tmp;
-		contrast_stretching(magnitude, magnitude_tmp);
-		magnitude = magnitude_tmp.clone();
-
-		// std::cout << magnitude << std::endl;
-		// magnitude.convertTo(magnitude, CV_8UC1);
 		/////////////////////
 
 		// display input_img
-		cv::namedWindow("input_img", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
 		cv::imshow("input_img", input_img);
 
 		// display out_max_pooling
-		cv::namedWindow("out_max_pooling", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("out_max_pooling", cv::WINDOW_NORMAL);
 		cv::imshow("out_max_pooling", out_max_pooling);
 
 		// display out_avg_pooling
-		cv::namedWindow("out_avg_pooling", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("out_avg_pooling", cv::WINDOW_NORMAL);
 		cv::imshow("out_avg_pooling", out_avg_pooling);
 
 		// display out_convfloat
-		cv::namedWindow("out_convfloat", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("out_convfloat", cv::WINDOW_NORMAL);
 		cv::imshow("out_convfloat", out_convfloat);
 
 		// display out_conv
-		cv::namedWindow("out_conv", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("out_conv", cv::WINDOW_NORMAL);
 		cv::imshow("out_conv", out_conv);
 
 		// display out_gauss_horizontal
-		cv::namedWindow("out_gauss_horizontal", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("out_gauss_horizontal", cv::WINDOW_NORMAL);
 		cv::imshow("out_gauss_horizontal", out_gauss_horizontal);
 
 		// display out_gauss_vertical
-		cv::namedWindow("out_gauss_vertical", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("out_gauss_vertical", cv::WINDOW_NORMAL);
 		cv::imshow("out_gauss_vertical", out_gauss_vertical);
 		
 		// display out_gauss_2D
-		cv::namedWindow("out_gauss_2D", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("out_gauss_2D", cv::WINDOW_NORMAL);
 		cv::imshow("out_gauss_2D", out_gauss_2D);
 
-		// display magnitude
-		cv::namedWindow("magnitude", cv::WINDOW_AUTOSIZE);
-		cv::imshow("magnitude", magnitude);
-
-		// display orientation
-		cv::Mat adjMap;
-		cv::convertScaleAbs(orientation, adjMap, 255 / (2*M_PI));
-		cv::Mat falseColorsMap;
-		cv::applyColorMap(adjMap, falseColorsMap, cv::COLORMAP_AUTUMN);
-		cv::imshow("orientation", falseColorsMap);
-		
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
 		std::cout<<"key "<<int(key)<<std::endl;
