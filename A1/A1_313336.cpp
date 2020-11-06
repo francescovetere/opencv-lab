@@ -76,20 +76,20 @@ void zero_padding(const cv::Mat& input, int padding_rows, int padding_cols, cv::
 
 /**
  * Contrast stretching
- * Riporta i valori della matrice di input tra [range_min, range_max], e mette il risultato in una matrice di output
+ * Riporta i valori della matrice di input tra [0, 255], e mette il risultato in una matrice di output
  * In generale, contrast_and_gain(r, c) = a*f(r, c) + b
  * contrast_stretching ne è un caso particolare in cui:
  * a = 255 / max(f) - min(f)
  * b = (255 * min(f)) / max(f) - min(f)
  */
-void contrast_stretching(const cv::Mat& input, cv::Mat& output) {
+void contrast_stretching(const cv::Mat& input, cv::Mat& output, float MAX_RANGE) {
 	double min_pixel, max_pixel;
 	cv::minMaxLoc(input, &min_pixel, &max_pixel);
 	
 	// std::cout << "min: " << min_pixel << ", max: " << max_pixel << std::endl;
 
-	float a = (float) (255 / (max_pixel - min_pixel));
-	float b = (float) (-1 * ((255 * min_pixel) / (max_pixel - min_pixel)));
+	float a = (float) (MAX_RANGE / (max_pixel - min_pixel));
+	float b = (float) (-1 * ((MAX_RANGE * min_pixel) / (max_pixel - min_pixel)));
 	
 	output.create(input.rows, input.cols, CV_8UC1);
 
@@ -302,7 +302,7 @@ void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride 
 	cv::Mat convfloat_out;
 	convFloat(image, kernel, convfloat_out, stride);
 
-	contrast_stretching(convfloat_out, out);
+	contrast_stretching(convfloat_out, out, 255);
 }
 
 
@@ -380,18 +380,157 @@ void sobel(const cv::Mat& image, cv::Mat& magnitude, cv::Mat& orientation) {
 		for(int c = 0; c < image.cols; ++c) {
 				float current_derivative_x = *((float*) &(derivative_x.data[(r*derivative_x.cols + c)*derivative_x.elemSize()]));
 				float current_derivative_y = *((float*) &(derivative_y.data[(r*derivative_y.cols + c)*derivative_y.elemSize()]));
-
-				*((float*) &(magnitude.data[(r*magnitude.cols + c)*magnitude.elemSize()]))
-				= (float) sqrt(pow(current_derivative_x, 2) + pow(current_derivative_y, 2));
 				
-				*((float*) &(orientation.data[(r*orientation.cols + c)*orientation.elemSize()])) 
-				= atan2(current_derivative_y, current_derivative_x);                                                     
+				float* current_magnitude_pixel = ((float*) &(magnitude.data[(r*magnitude.cols + c)*magnitude.elemSize()]));
+				float* current_orientation_pixel = ((float*) &(orientation.data[(r*orientation.cols + c)*orientation.elemSize()]));
+
+				*current_magnitude_pixel = (float) sqrt(pow(current_derivative_x, 2) + pow(current_derivative_y, 2));
+				
+				*current_orientation_pixel = atan2(current_derivative_y, current_derivative_x);
+
+				// se ho valori negativi sommo 2*M_PI per rifasare
+				if(*current_orientation_pixel < 0) 
+					*current_orientation_pixel += 2*M_PI;                                                
+		}
+	}
+}
+
+
+
+/**
+ * ES 8 - Magnitudo e orientazione di Sobel 3x3
+ * Date due coordinate r e c non discrete, calcolo un valore corrispondente ad esse
+ * interpolando il valore reale dei 4 vicini discreti, moltiplicati con opportuni pesi
+ * 
+ * Uso un template di funzione, in quanto ho necessità di due versioni:
+ * - uint_8, per l'ES 8
+ * - float, per l'ES 9
+ */
+template <class T>
+float bilinear(const cv::Mat& image, float r, float c) {
+	// calcolo s e t, ossia le parti decimali di r e c
+	int r_int = floor(r);
+	int c_int = floor(c);
+	float s = r - floor(r);
+	float t = c - floor(c);
+
+	// DEBUG
+	// std::cout << "r: " << r << " c: " << c << std::endl;
+	// std::cout << "floor(r): " << floor(r) << " floor(c): " << floor(c) << std::endl;
+	// std::cout << "s: " << s << " t: " << t << std::endl;
+
+	// calcolo il valore dei 4 vicini discreti
+	T f00 = image.at<T>(r_int, c_int);
+	T f10 = image.at<T>(r_int + 1, c_int);
+	T f01 = image.at<T>(r_int, c_int + 1);
+	T f11 = image.at<T>(r_int + 1, c_int + 1);
+
+	// calcolo i contributi dei 4 vicini, moltiplicandoli per i pesi adeguati
+	float contribute_00 = f00*(1 - s)*(1 - t);
+	float contribute_10 = f10*s*(1 - t);
+	float contribute_01 = f01*(1 - s)*t;
+	float contribute_11 = f11*s*t;
+
+	float final_value = contribute_00 + contribute_10 + contribute_01 + contribute_11;
+
+	//DEBUG
+	// std::cout << "final_value: " << final_value << std::endl;
+
+	return final_value;
+}
+
+
+
+/**
+ * ES 9 - Find peaks
+ */
+int findPeaks(const cv::Mat& magnitude, const cv::Mat& orientation, cv::Mat& out, float th) {
+	// al termine, restiuirò il numero di picchi trovati
+	int n_peaks = 0;
+
+	out.create(magnitude.rows, magnitude.cols, magnitude.type());
+
+	for(int r = 0; r < magnitude.rows; ++r) {
+		for(int c = 0; c < magnitude.cols; ++c) {
+			float theta = orientation.at<float>(r, c);
+
+			// calcolo i vicini e1 ed e2, usando la formula data sulle slide
+			float e1_x = r + 1*cos(theta);
+			float e1_y = c + 1*sin(theta);
+			float e2_x = r - 1*cos(theta);
+			float e2_y = c - 1*sin(theta);
+
+			// controllo se i vicini fuoriescono dal bordo
+			// in tal caso sopprimo, subito il massimo e proseguo con la prossima iterazione
+			if(
+				e1_x > magnitude.rows - 1 || e1_y > magnitude.cols - 1 ||
+				e2_x > magnitude.rows - 1 || e2_y > magnitude.cols - 1
+			)
+				out.at<float>(r, c) = 0.0f;
+
+			// altrimenti, proseguo confrontando il pixel corrente coi vicini trovati
+			else {
+				// e1 ed e2 hanno coord non intere, dunque uso la funzione bilinear
+				float e1_val = bilinear<float>(magnitude, e1_x, e1_y);
+				float e2_val = bilinear<float>(magnitude, e2_x, e2_y);
+
+				// non-maximum suppression, usando la formula data sulle slide
+				if(
+					magnitude.at<float>(r, c) >= e1_val &&
+					magnitude.at<float>(r, c) >= e2_val &&
+					magnitude.at<float>(r, c) >= th
+				) {
+					std::cout << magnitude.at<float>(r, c) << " ";
+					out.at<float>(r, c) = magnitude.at<float>(r, c);
+					++n_peaks;
+				}
+
+				else
+					out.at<float>(r, c) = 0.0f;
+			}
 		}
 	}
 
-	cv::Mat magnitude_tmp;
-	contrast_stretching(magnitude, magnitude_tmp);
-	magnitude = magnitude_tmp.clone();
+	return n_peaks;
+}
+
+
+
+/**
+ * ES 10 - Double th
+ */
+void doubleTh(const cv::Mat& magnitude, cv::Mat& out, float th1, float th2) {
+	out.create(magnitude.rows, magnitude.cols, CV_8UC1);
+
+	for(int r = 0; r < out.rows; ++r) {
+		for(int c = 0; c < out.cols; ++c) {
+			float current_pixel = magnitude.at<float>(r, c);
+			uint8_t* out_pixel = &(out.at<uint8_t>(r, c));
+
+			if(current_pixel > th1) *out_pixel = 255;
+			else if(current_pixel <= th1 && current_pixel > th2) *out_pixel = 128;
+			else *out_pixel = 0;
+		}
+	}
+}
+
+
+
+/**
+ * ES 11 - Canny
+ */
+void canny(const cv::Mat& image, cv::Mat& out, float th, float th1, float th2) {
+	// Calcolo gradiente con sobel (magnitudo e orientazione)
+	cv::Mat magnitude, orientation;
+	sobel(image, magnitude, orientation);
+
+	// Non-maximum suppression della magnitudo
+	cv::Mat non_maximum_suppression;
+	int n_peaks = findPeaks(magnitude, orientation, non_maximum_suppression, th);
+	std::cout << "n_peaks: " << n_peaks << std::endl;
+
+	// Sogliatura con isteresi
+	doubleTh(non_maximum_suppression, out, th1, th2);
 }
 
 
@@ -433,6 +572,10 @@ int main(int argc, char **argv) {
 
 		//////////////////////
 		//processing code here
+		float th, th1, th2;
+
+		std::cout << "Insert th, th1 and th2, separated by space: ";
+		std::cin >> th >> th1 >> th2;
 
 		/****************************
 		 *********** ES1 ************
@@ -548,6 +691,30 @@ int main(int argc, char **argv) {
 		cv::Mat orientation;
 
 		sobel(input_img, magnitude, orientation);
+		
+		// contrast_stretching(magnitude.clone(), magnitude, 1.0f);
+
+		/***************************
+		*********** ES8 ************
+		****************************/
+		bilinear<uint8_t>(input_img, 27.8f, 11.4f);
+
+		
+		
+		/***************************
+		*********** ES9 ************
+		****************************/
+		cv::Mat non_max_suppression;
+		int n_peaks = findPeaks(magnitude, orientation, non_max_suppression, th);
+		std::cout << "n_peaks: " << n_peaks << std::endl;
+
+		
+
+		/***************************
+		*********** ES11 ************
+		****************************/
+		cv::Mat out_canny;
+		canny(input_img, out_canny, th, th1, th2);
 		/////////////////////
 
 		// display input_img
@@ -557,12 +724,12 @@ int main(int argc, char **argv) {
 		// display out_max_pooling
 		cv::namedWindow("out_max_pooling", cv::WINDOW_AUTOSIZE);
 		cv::imshow("out_max_pooling", out_max_pooling);
-		cv::imwrite("out_max_pooling.png", out_max_pooling);
+		// cv::imwrite("out_max_pooling.png", out_max_pooling);
 
 		// display out_avg_pooling
 		cv::namedWindow("out_avg_pooling", cv::WINDOW_AUTOSIZE);
 		cv::imshow("out_avg_pooling", out_avg_pooling);
-		cv::imwrite("out_avg_pooling.png", out_avg_pooling);
+		// cv::imwrite("out_avg_pooling.png", out_avg_pooling);
 
 		// display out_convfloat
 		// cv::namedWindow("out_convfloat", cv::WINDOW_AUTOSIZE);
@@ -571,27 +738,29 @@ int main(int argc, char **argv) {
 		// display out_conv
 		cv::namedWindow("out_conv", cv::WINDOW_AUTOSIZE);
 		cv::imshow("out_conv", out_conv);
-		cv::imwrite("out_conv.png", out_conv);
+		// cv::imwrite("out_conv.png", out_conv);
 
 		// display out_gauss_horizontal
 		cv::namedWindow("out_gauss_horizontal", cv::WINDOW_AUTOSIZE);
 		cv::imshow("out_gauss_horizontal", out_gauss_horizontal);
-		cv::imwrite("out_gauss_horizontal.png", out_gauss_horizontal);		
+		// cv::imwrite("out_gauss_horizontal.png", out_gauss_horizontal);		
 
 		// display out_gauss_vertical
 		cv::namedWindow("out_gauss_vertical", cv::WINDOW_AUTOSIZE);
 		cv::imshow("out_gauss_vertical", out_gauss_vertical);
-		cv::imwrite("out_gauss_vertical.png", out_gauss_vertical);
+		// cv::imwrite("out_gauss_vertical.png", out_gauss_vertical);
 		
 		// display out_gauss_2D
 		cv::namedWindow("out_gauss_2D", cv::WINDOW_AUTOSIZE);
 		cv::imshow("out_gauss_2D", out_gauss_2D);
-		cv::imwrite("out_gauss_2D.png", out_gauss_2D);
+		// cv::imwrite("out_gauss_2D.png", out_gauss_2D);
 
 		// display magnitude
+		// Effettuo un contrast stretching sulla magnitude per poterla visualizzare
+		contrast_stretching(magnitude.clone(), magnitude, 255);
 		cv::namedWindow("magnitude", cv::WINDOW_AUTOSIZE);
 		cv::imshow("magnitude", magnitude);
-		cv::imwrite("magnitude.png", magnitude);
+		// cv::imwrite("magnitude.png", magnitude);
 
 		// // display orientation
 		cv::Mat adjMap;
@@ -599,7 +768,21 @@ int main(int argc, char **argv) {
 		cv::Mat falseColorsMap;
 		cv::applyColorMap(adjMap, falseColorsMap, cv::COLORMAP_AUTUMN);
 		cv::imshow("orientation", falseColorsMap);
-		cv::imwrite("orientation.png", falseColorsMap);
+		// cv::imwrite("orientation2.png", falseColorsMap);
+
+		// display non_max_suppression
+		// contrast stretching per visualizzazione
+		contrast_stretching(non_max_suppression.clone(), non_max_suppression, 255);
+		cv::namedWindow("non_max_suppression", cv::WINDOW_AUTOSIZE);
+		cv::imshow("non_max_suppression", non_max_suppression);
+		// cv::imwrite("non_max_suppression.png", non_max_suppression);
+
+		// display out_canny
+		// contrast stretching per visualizzazione
+		// contrast_stretching(out_canny.clone(), out_canny);
+		cv::namedWindow("out_canny", cv::WINDOW_AUTOSIZE);
+		cv::imshow("out_canny", out_canny);
+		// cv::imwrite("out_canny.png", out_canny);
 		
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
