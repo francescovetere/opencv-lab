@@ -443,10 +443,9 @@ float bilinear(const cv::Mat& image, float r, float c) {
 
 /**
  * ES 9 - Find peaks
+ * Nota: non ritorno alcun valore, in quanto non necessario in questa funzione
  */
-int findPeaks(const cv::Mat& magnitude, const cv::Mat& orientation, cv::Mat& out, float th) {
-	// al termine, restiuirò il numero di picchi trovati
-	int n_peaks = 0;
+void findPeaks(const cv::Mat& magnitude, const cv::Mat& orientation, cv::Mat& out, float th) {
 
 	out.create(magnitude.rows, magnitude.cols, magnitude.type());
 
@@ -479,25 +478,21 @@ int findPeaks(const cv::Mat& magnitude, const cv::Mat& orientation, cv::Mat& out
 					magnitude.at<float>(r, c) >= e1_val &&
 					magnitude.at<float>(r, c) >= e2_val &&
 					magnitude.at<float>(r, c) >= th
-				) {
-					std::cout << magnitude.at<float>(r, c) << " ";
+				) 
 					out.at<float>(r, c) = magnitude.at<float>(r, c);
-					++n_peaks;
-				}
 
 				else
 					out.at<float>(r, c) = 0.0f;
 			}
 		}
 	}
-
-	return n_peaks;
 }
 
 
 
 /**
  * ES 10 - Double th
+ * Nota: non ritorno alcun valore, in quanto non necessario in questa funzione
  */
 void doubleTh(const cv::Mat& magnitude, cv::Mat& out, float th1, float th2) {
 	out.create(magnitude.rows, magnitude.cols, CV_8UC1);
@@ -518,6 +513,7 @@ void doubleTh(const cv::Mat& magnitude, cv::Mat& out, float th1, float th2) {
 
 /**
  * ES 11 - Canny
+ * Nota: non ritorno alcun valore, in quanto non necessario in questa funzione
  */
 void canny(const cv::Mat& image, cv::Mat& out, float th, float th1, float th2) {
 	// Calcolo gradiente con sobel (magnitudo e orientazione)
@@ -526,8 +522,7 @@ void canny(const cv::Mat& image, cv::Mat& out, float th, float th1, float th2) {
 
 	// Non-maximum suppression della magnitudo
 	cv::Mat non_maximum_suppression;
-	int n_peaks = findPeaks(magnitude, orientation, non_maximum_suppression, th);
-	std::cout << "n_peaks: " << n_peaks << std::endl;
+	findPeaks(magnitude, orientation, non_maximum_suppression, th);
 
 	// Sogliatura con isteresi
 	doubleTh(non_maximum_suppression, out, th1, th2);
@@ -572,10 +567,8 @@ int main(int argc, char **argv) {
 
 		//////////////////////
 		//processing code here
-		float th, th1, th2;
 
-		std::cout << "Insert th, th1 and th2, separated by space: ";
-		std::cin >> th >> th1 >> th2;
+		std::cout << "\nProcessing...\n\n";
 
 		/****************************
 		 *********** ES1 ************
@@ -589,13 +582,14 @@ int main(int argc, char **argv) {
 		cv::Mat out_max_pooling;
 		maxPooling(input_img, size_max_pooling, stride_max_pooling, out_max_pooling);
 
-		std::cout << "output max pooling: " << out_max_pooling.rows << " " << out_max_pooling.cols << std::endl;
+		// DEBUG
+		// std::cout << "output max pooling: " << out_max_pooling.rows << " " << out_max_pooling.cols << std::endl;
 
 
 
-		// /****************************
-		//  *********** ES2 ************
-		//  ***************************/
+		/****************************
+		 *********** ES2 ************
+		 ***************************/
 		// scelgo le dimensioni di size e stride per effettuare l'average pooling
 		int size_avg_pooling = 5;
 		int stride_avg_pooling = 1;
@@ -605,7 +599,8 @@ int main(int argc, char **argv) {
 		cv::Mat out_avg_pooling;
 		averagePooling(input_img, size_avg_pooling, stride_avg_pooling, out_avg_pooling);
 
-		std::cout << "output avg pooling: " << out_avg_pooling.rows << " " << out_avg_pooling.cols << std::endl;
+		// DEBUG
+		// std::cout << "output avg pooling: " << out_avg_pooling.rows << " " << out_avg_pooling.cols << std::endl;
 
 
 
@@ -647,7 +642,8 @@ int main(int argc, char **argv) {
 		cv::Mat out_conv;
 		conv(input_img, kernel_conv, out_conv, stride_conv);
 
-		std::cout << "output conv: " << out_conv.rows << " " << out_conv.cols << std::endl;
+		// DEBUG
+		// std::cout << "output conv: " << out_conv.rows << " " << out_conv.cols << std::endl;
 
 		// /***************************
 		// *********** ES6 ************
@@ -677,10 +673,11 @@ int main(int argc, char **argv) {
 		// avrò padding su tutti e 4 i lati
 		conv(out_gauss_horizontal, kernel_gauss_vertical, out_gauss_2D, stride_gauss);
 		
-		std::cout << "output gaussians: " << std::endl;
-		std::cout << out_gauss_horizontal.rows << ", " << out_gauss_horizontal.cols << std::endl;
-		std::cout << out_gauss_vertical.rows << ", " << out_gauss_vertical.cols << std::endl;
-		std::cout << out_gauss_2D.rows << ", " << out_gauss_2D.cols << std::endl;
+		// DEBUG
+		// std::cout << "output gaussians: " << std::endl;
+		// std::cout << out_gauss_horizontal.rows << ", " << out_gauss_horizontal.cols << std::endl;
+		// std::cout << out_gauss_vertical.rows << ", " << out_gauss_vertical.cols << std::endl;
+		// std::cout << out_gauss_2D.rows << ", " << out_gauss_2D.cols << std::endl;
 
 
 
@@ -704,15 +701,17 @@ int main(int argc, char **argv) {
 		/***************************
 		*********** ES9 ************
 		****************************/
+		int th = 150;
 		cv::Mat non_max_suppression;
-		int n_peaks = findPeaks(magnitude, orientation, non_max_suppression, th);
-		std::cout << "n_peaks: " << n_peaks << std::endl;
+		findPeaks(magnitude, orientation, non_max_suppression, th);
 
 		
 
 		/***************************
 		*********** ES11 ************
 		****************************/
+		int th1 = 170;
+		int th2 = 130;
 		cv::Mat out_canny;
 		canny(input_img, out_canny, th, th1, th2);
 		/////////////////////
