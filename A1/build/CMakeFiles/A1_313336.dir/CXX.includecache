@@ -21,6 +21,8 @@ string
 -
 vector
 -
+algorithm
+-
 numeric
 -
 cmath
