@@ -82,33 +82,32 @@ void zero_padding(const cv::Mat& input, int padding_rows, int padding_cols, cv::
  * a = 255 / max(f) - min(f)
  * b = (255 * min(f)) / max(f) - min(f)
  */
-void contrast_stretching(const cv::Mat& input, cv::Mat& output, float MAX_RANGE) {
+void contrast_stretching(const cv::Mat& input, cv::Mat& output, int type, float MAX_RANGE = 255.0f) {
 	double min_pixel, max_pixel;
 	cv::minMaxLoc(input, &min_pixel, &max_pixel);
 	
+	// DEBUG
 	// std::cout << "min: " << min_pixel << ", max: " << max_pixel << std::endl;
 
 	float a = (float) (MAX_RANGE / (max_pixel - min_pixel));
 	float b = (float) (-1 * ((MAX_RANGE * min_pixel) / (max_pixel - min_pixel)));
 	
-	output.create(input.rows, input.cols, CV_8UC1);
+	output.create(input.rows, input.cols, type);
 
 	for(int r = 0; r < input.rows; ++r) {
 		for(int c = 0; c < input.cols; ++c) {
 			for(int k = 0; k < input.channels(); ++k) {
 				float pixel_input = *((float*) &(input.data[((r*input.cols + c)*input.channels() + k)*input.elemSize1()]));
-				// float stretched_pixel_input = ((pixel_input - min_pixel) / (max_pixel - min_pixel))*255;
+				
 				float stretched_pixel_input = a*pixel_input + b;
-
-				// std::cout << (float)a << " " << (float)b << " " << (float)stretched_pixel_input << std::endl;
-				output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()] = (uchar) stretched_pixel_input;
+				
+				if(type == CV_8UC1)
+					output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()] = (uchar) stretched_pixel_input;
+				else if(type == CV_32FC1)
+					*((float*)(&output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()])) = stretched_pixel_input;
 			}
 		}
 	}
-
-	// cv::namedWindow("output_contrast_stretching", cv::WINDOW_AUTOSIZE);
-	// cv::imshow("output_contrast_stretching", output);
-
 }
 
 
@@ -302,7 +301,7 @@ void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride 
 	cv::Mat convfloat_out;
 	convFloat(image, kernel, convfloat_out, stride);
 
-	contrast_stretching(convfloat_out, out, 255);
+	contrast_stretching(convfloat_out, out, CV_8UC1);
 }
 
 
@@ -520,6 +519,14 @@ void canny(const cv::Mat& image, cv::Mat& out, float th, float th1, float th2) {
 	cv::Mat magnitude, orientation;
 	sobel(image, magnitude, orientation);
 
+	// Contrast stretching [0; 255] per poter applicare la prossima soglia
+	double minVal, maxVal;
+	cv::minMaxLoc(magnitude, &minVal, &maxVal);
+	std::cout << "pre: " << minVal << ", " << maxVal << std::endl;
+	contrast_stretching(magnitude.clone(), magnitude, CV_32FC1);
+	cv::minMaxLoc(magnitude, &minVal, &maxVal);
+	std::cout << "post: " << minVal << ", " << maxVal << std::endl;
+
 	// Non-maximum suppression della magnitudo
 	cv::Mat non_maximum_suppression;
 	findPeaks(magnitude, orientation, non_maximum_suppression, th);
@@ -701,7 +708,7 @@ int main(int argc, char **argv) {
 		/***************************
 		*********** ES9 ************
 		****************************/
-		int th = 150;
+		int th = 30;
 		cv::Mat non_max_suppression;
 		findPeaks(magnitude, orientation, non_max_suppression, th);
 
@@ -710,8 +717,8 @@ int main(int argc, char **argv) {
 		/***************************
 		*********** ES11 ************
 		****************************/
-		int th1 = 170;
-		int th2 = 130;
+		int th1 = 120;
+		int th2 = 60;
 		cv::Mat out_canny;
 		canny(input_img, out_canny, th, th1, th2);
 		/////////////////////
@@ -756,7 +763,7 @@ int main(int argc, char **argv) {
 
 		// display magnitude
 		// Effettuo un contrast stretching sulla magnitude per poterla visualizzare
-		contrast_stretching(magnitude.clone(), magnitude, 255);
+		contrast_stretching(magnitude.clone(), magnitude, CV_8UC1);
 		cv::namedWindow("magnitude", cv::WINDOW_AUTOSIZE);
 		cv::imshow("magnitude", magnitude);
 		// cv::imwrite("magnitude.png", magnitude);
@@ -771,7 +778,7 @@ int main(int argc, char **argv) {
 
 		// display non_max_suppression
 		// contrast stretching per visualizzazione
-		contrast_stretching(non_max_suppression.clone(), non_max_suppression, 255);
+		contrast_stretching(non_max_suppression.clone(), non_max_suppression, CV_8UC1);
 		cv::namedWindow("non_max_suppression", cv::WINDOW_AUTOSIZE);
 		cv::imshow("non_max_suppression", non_max_suppression);
 		// cv::imwrite("non_max_suppression.png", non_max_suppression);
