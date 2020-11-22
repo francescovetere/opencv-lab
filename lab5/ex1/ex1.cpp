@@ -3,11 +3,12 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <cmath> // sinf, cosf
+
 //std:
 #include <fstream>
 #include <iostream>
 #include <string>
-
 
 struct ArgumentList {
 	std::string image_name;		    //!< input_img file name
@@ -21,6 +22,21 @@ struct Point {
 	float x;
 	float y;
 	float z;
+};
+
+struct Camera {
+	float width;
+	float height;
+	float alpha;
+	float beta;
+	float u0;
+	float v0;
+	float orientation_x;
+	float orientation_y;
+	float orientation_z;
+	float position_x;
+	float position_y;
+	float position_z;
 };
 
 bool ParseInputs(ArgumentList& args, int argc, char **argv) {
@@ -56,23 +72,28 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 }
 
 /**
- * Funzione per la lettura del file scan.dat
+ * Funzione per la lettura di un file strutturato nel seguente modo
+ * 	<N_punti>
+ *  <point1.x> <point1.y> <point1.z>
+ *  ...
+ *  <pointN.x> <pointN.y> <pointN.z>
+ *
  * Riceve in input la stringa il path del file
  * Restituisce in output l'array dei punti letti
  */
-std::vector<Point> read_scan_file(const std::string& scan_path) {
-	std::ifstream scan_file;
-	scan_file.open(scan_path.c_str());
+std::vector<Point> read_points(const std::string& path) {
+	std::ifstream file;
+	file.open(path.c_str());
 	
 	int num_points;
-	scan_file >> num_points;
+	file >> num_points;
 	std::cout << num_points << std::endl;
 
 	std::vector<Point> points;
 
 	float point_coord;
 	int i = 0;
-	while(scan_file >> point_coord) {
+	while(file >> point_coord) {
 		float x, y, z;
 		switch(i){
 			case 0:
@@ -92,9 +113,62 @@ std::vector<Point> read_scan_file(const std::string& scan_path) {
 		i = (i+1) % 3;
 	}
 
-	scan_file.close();
+	file.close();
 	
 	return points;
+}
+
+/**
+ * Funzione per la lettura di un file strutturato nel seguente modo
+ * 640 480 //larghezza e altezza
+ * 400 400 //lunghezza focale in pixel
+ * 320 240 //centri ottici u0, vo
+ * 0.0 0.0 0.0 //orientazione rispetto a x,y,z
+ * 0.0 -5.0 -10.0 //posizione x,y,z
+ *
+ * Riceve in input la stringa il path del file
+ * Restituisce in output l'array dei punti letti
+ */
+Camera read_camera(const std::string& path) {
+	std::ifstream file;
+	file.open(path.c_str());
+
+	Camera camera;
+
+	file >> camera.width >> camera.height
+		 >> camera.alpha >> camera.beta
+	     >> camera.u0 >> camera.v0
+		 >> camera.orientation_x >> camera.orientation_y >> camera.orientation_z
+		 >> camera.position_x >> camera.position_y >> camera.position_z;
+
+	file.close();
+
+	return camera;
+}
+
+/**
+ * TODO
+ */
+void concat(const cv::Mat& R, const cv::Mat& T, cv::Mat& RT) {
+	RT.create(R.rows, R.cols + T.cols, R.type());
+	for(int r = 0; r < RT.rows; ++r)
+		for(int c = 0; c < RT.cols; ++c)
+			if(c < R.cols) RT.at<float>(r, c) = R.at<float>(r, c);
+			else RT.at<float>(r, c) = T.at<float>(r, c);
+}
+
+
+/**
+ * Funzione per la conversione di un vettore da coordinate omogenee a euclidee
+ * Utile per passare dal punto P = M*Pw = (x, y, z) ad un punto (x/z, y/z)
+ * 
+ * TODO
+ */
+void homogeneous_to_euclidean(const cv::Mat& homogeneus, cv::Mat& euclidean) {
+	euclidean.create(homogeneus.rows - 1, homogeneus.cols, homogeneus.type());
+	for(int r = 0; r < euclidean.rows; ++r)
+		for(int c = 0; c < euclidean.cols; ++c)
+			euclidean.at<float>(r, c) = homogeneus.at<float>(r, c) / homogeneus.at<float>(homogeneus.rows);
 }
 
 int main(int argc, char **argv) {
@@ -110,13 +184,28 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
+	// Lettura punti e parametri camera
+	std::string scan_path("../../data/ex1/data/scan.dat");
+	std::string params_front_path("../../data/ex1/data/params_front.dat");
+		
+	std::vector<Point> points = read_points(scan_path);
+
+	// DEBUG
+	// for(Point& point : points) {
+	// 	std::cout << "x: " << point.x << ", y: " << point.y << ", z: " << point.z << "\n";
+	// }
+
+	Camera camera = read_camera(params_front_path);
+	// DEBUG
+	// std::cout << camera.alpha << std::endl;
+
 	while(!exit_loop) {
 		//generating file name
 		//
 		//multi frame case
 		if(args.image_name.find('%') != std::string::npos)
 			sprintf(frame_name,(const char*)(args.image_name.c_str()),frame_number);
-		else //single frame case
+		else //sinfgle frame case
 			sprintf(frame_name,"%s",args.image_name.c_str());
 
 		//opening file
@@ -131,21 +220,99 @@ int main(int argc, char **argv) {
 
 		//////////////////////
 		//processing code here
+		// Costruisco la matrice degli instrinseci K (3x3)
+		float K_data[3][3] = {{camera.alpha, 0.0f, camera.u0},
+						 	  {0.0f, camera.beta, camera.v0},
+						      {0.0f, 0.0f, 1.0f}
+					         };
 
-		std::string scan_path("../../data/ex1/data/scan.dat");
-		std::string params_front_path("../../data/ex1/data/params_front.dat");
+		cv::Mat K(3, 3, CV_32FC1, K_data);
+		
+		// DEBUG
+		// std::cout << K << std::endl;
 
-		std::vector<Point> points = read_scan_file(scan_path);
 
+		// Costruisco la matrice degli estrinseci [R T] (3x4)
+
+		// R = Rx(alpha)*Ry(beta)*Rz(theta) (3x3)
+		float Rx_data[3][3] = {{1.0f, 0.0f, 0.0f},
+						 	   {0.0f, cosf(camera.orientation_x), -sinf(camera.orientation_x)},
+						 	   {0.0f, sinf(camera.orientation_x), cosf(camera.orientation_x)}
+					    	  };
+
+		float Ry_data[3][3] = {{cosf(camera.orientation_y), 0.0f, sinf(camera.orientation_y)},
+						 	   {0.0f, 1.0f, 0.0f},
+						 	   {-sinf(camera.orientation_y), 0.0f, cosf(camera.orientation_y)}
+					    	  };
+
+		float Rz_data[3][3] = {{cosf(camera.orientation_z), -sinf(camera.orientation_z), 0.0f},
+						 	   {sinf(camera.orientation_z), cosf(camera.orientation_z), 0.0f},
+						 	   {0.0f, 0.0f, 1.0f}
+					    	  };
+		
+		cv::Mat Rx(3, 3, CV_32FC1, Rx_data);
+		cv::Mat Ry(3, 3, CV_32FC1, Ry_data);
+		cv::Mat Rz(3, 3, CV_32FC1, Rz_data);
+
+		cv::Mat R = Rx * Ry * Rz;
+
+		// DEBUG
+		// std::cout << R << std::endl;
+
+
+		// Costruisco la matrice degli instrinseci K (3x3)
+		float T_data[3][1] = {{camera.position_x}, {camera.position_y}, {camera.position_z}};
+
+		cv::Mat T(3, 1, CV_32FC1, T_data);
+
+		// DEBUG
+		// std::cout << T << std::endl;
+
+
+		// Calcolo M = K * [R T]
+		cv::Mat RT;
+		hconcat(R, T, RT);
+		cv::Mat M = K * RT;
+
+		//DEBUG
+		// std::cout << "M: " << M << std::endl;
+
+		
+		// Dichiaro la matrice in cui visualizzerò il risultato
+		// Inizialmente tutta nera, metterò a bianco i pixel proiettati
+		std::cout << camera.width << " " << camera.height << std::endl;
+		cv::Mat out = cv::Mat::zeros(camera.height, camera.width, CV_8UC1);
+		
+		// Per ogni punto Pw nel mondo, calcolo la sua proiezione 2D tramite la formula P = M * Pw
+		// Torno poi in coordinate euclidee, ottenendo quindi P = (x, y)
 		for(Point& point : points) {
-			std::cout << "x: " << point.x << ", y: " << point.y << ", z: " << point.z << "\n";
-		}
+			// trasformo il punto Pw attuale in coordinate omogenee
+			float Pw_data[4][1] = {{point.x}, {point.y}, {point.z}, 1.0f};
+			cv::Mat Pw(4, 1, CV_32FC1, Pw_data);
 
+			cv::Mat P = M * Pw;
+			
+			// homogeneous_to_euclidean(P.clone(), P);
+
+			int x = P.at<float>(0,0) / P.at<float>(2,0);
+			int y = P.at<float>(1,0) / P.at<float>(2,0);
+			
+			// DEBUG
+			// std::cout << "(" << x << ", " << y << ")" << std::endl;
+
+			// Visualizzo il punto solo se rientra nella finestra!
+			if(x > 0 && x < camera.width && y > 0 && y < camera.height)
+				out.at<float>(x, y) = 255;
+		}
 		/////////////////////
 
 		//display input_img
 		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
 		cv::imshow("input_img", input_img);
+
+		//display out
+		cv::namedWindow("out", cv::WINDOW_NORMAL);
+		cv::imshow("out", out);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(args.wait_t);
@@ -162,6 +329,11 @@ int main(int argc, char **argv) {
 			exit_loop = true;
 
 		frame_number++;
+
+		// Ruoto attorno alla scena
+		camera.orientation_x += 0.05f;
+		camera.orientation_y += 0.05f;
+		camera.orientation_z += 0.05f;
 	}
 
 	return 0;
