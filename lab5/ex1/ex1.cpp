@@ -134,42 +134,27 @@ Camera read_camera(const std::string& path) {
 	file.open(path.c_str());
 
 	Camera camera;
+	float x, y, z;
 
 	file >> camera.width >> camera.height
 		 >> camera.alpha >> camera.beta
 	     >> camera.u0 >> camera.v0
 		 >> camera.orientation_x >> camera.orientation_y >> camera.orientation_z
-		 >> camera.position_x >> camera.position_y >> camera.position_z;
+		//  >> x >> y >> z;
+		>> camera.position_x >> camera.position_y >> camera.position_z;
+
+	//////////////////////////////////////
+	// I parametri letti sono purtroppo scritti in ordine sbagliato sul file, in questo particolare caso
+	// camera.position_x = -y;
+	// camera.position_y = -z;
+	// camera.position_z = x;
+	//////////////////////////////////////
 
 	file.close();
 
 	return camera;
 }
 
-/**
- * TODO
- */
-void concat(const cv::Mat& R, const cv::Mat& T, cv::Mat& RT) {
-	RT.create(R.rows, R.cols + T.cols, R.type());
-	for(int r = 0; r < RT.rows; ++r)
-		for(int c = 0; c < RT.cols; ++c)
-			if(c < R.cols) RT.at<float>(r, c) = R.at<float>(r, c);
-			else RT.at<float>(r, c) = T.at<float>(r, c);
-}
-
-
-/**
- * Funzione per la conversione di un vettore da coordinate omogenee a euclidee
- * Utile per passare dal punto P = M*Pw = (x, y, z) ad un punto (x/z, y/z)
- * 
- * TODO
- */
-void homogeneous_to_euclidean(const cv::Mat& homogeneus, cv::Mat& euclidean) {
-	euclidean.create(homogeneus.rows - 1, homogeneus.cols, homogeneus.type());
-	for(int r = 0; r < euclidean.rows; ++r)
-		for(int c = 0; c < euclidean.cols; ++c)
-			euclidean.at<float>(r, c) = homogeneus.at<float>(r, c) / homogeneus.at<float>(homogeneus.rows);
-}
 
 int main(int argc, char **argv) {
 	int frame_number = 0;
@@ -187,7 +172,7 @@ int main(int argc, char **argv) {
 	// Lettura punti e parametri camera
 	std::string scan_path("../../data/ex1/data/scan.dat");
 	std::string params_front_path("../../data/ex1/data/params_front.dat");
-		
+
 	std::vector<Point> points = read_points(scan_path);
 
 	// DEBUG
@@ -275,7 +260,7 @@ int main(int argc, char **argv) {
 		cv::Mat M = K * RT;
 
 		//DEBUG
-		// std::cout << "M: " << M << std::endl;
+		std::cout << "M: " << M << std::endl;
 
 		
 		// Dichiaro la matrice in cui visualizzerò il risultato
@@ -291,8 +276,6 @@ int main(int argc, char **argv) {
 			cv::Mat Pw(4, 1, CV_32FC1, Pw_data);
 
 			cv::Mat P = M * Pw;
-			
-			// homogeneous_to_euclidean(P.clone(), P);
 
 			int x = P.at<float>(0,0) / P.at<float>(2,0);
 			int y = P.at<float>(1,0) / P.at<float>(2,0);
@@ -300,18 +283,21 @@ int main(int argc, char **argv) {
 			// DEBUG
 			// std::cout << "(" << x << ", " << y << ")" << std::endl;
 
+			std::cout << "(" << x << ", " << y << ")" << std::endl;
 			// Visualizzo il punto solo se rientra nella finestra!
-			if(x > 0 && x < camera.width && y > 0 && y < camera.height)
-				out.at<float>(x, y) = 255;
+			if(x > 0 && x < camera.width && y > 0 && y < camera.height) {
+				out.at<u_int8_t>(x, y) = 255;
+				
+			}
 		}
 		/////////////////////
 
 		//display input_img
-		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
+		cv::namedWindow("input_img", cv::WINDOW_AUTOSIZE);
 		cv::imshow("input_img", input_img);
 
 		//display out
-		cv::namedWindow("out", cv::WINDOW_NORMAL);
+		cv::namedWindow("out", cv::WINDOW_AUTOSIZE);
 		cv::imshow("out", out);
 
 		//wait for key or timeout
