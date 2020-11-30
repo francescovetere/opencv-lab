@@ -1,7 +1,10 @@
 //OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/affine.hpp>
+
+#include <eigen3/Eigen/Geometry>
+#include <eigen3/Eigen/Dense>
 
 #include <cmath> // sinf, cosf
 
@@ -13,15 +16,6 @@
 struct ArgumentList {
 	std::string image_name;		    //!< input_img file name
 	int wait_t;                     //!< waiting time
-};
-
-/**
- * Dichiaro una struct per il generico punto letto da scan.dat
- */
-struct Point {
-	float x;
-	float y;
-	float z;
 };
 
 struct Camera {
@@ -37,6 +31,8 @@ struct Camera {
 	float position_x;
 	float position_y;
 	float position_z;
+
+	cv::Affine3f RT;
 };
 
 bool ParseInputs(ArgumentList& args, int argc, char **argv) {
@@ -81,7 +77,7 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
  * Riceve in input la stringa il path del file
  * Restituisce in output l'array dei punti letti
  */
-std::vector<Point> read_points(const std::string& path) {
+std::vector<cv::Point3f> read_points(const std::string& path) {
 	std::ifstream file;
 	file.open(path.c_str());
 	
@@ -89,29 +85,22 @@ std::vector<Point> read_points(const std::string& path) {
 	file >> num_points;
 	std::cout << num_points << std::endl;
 
-	std::vector<Point> points;
+	std::vector<cv::Point3f> points;
 
-	float point_coord;
-	int i = 0;
-	while(file >> point_coord) {
+	// for(int i = 0; i < num_points; ++i) {
+	while(!file.fail()) {
 		float x, y, z;
-		switch(i){
-			case 0:
-				x = point_coord;
-				break;
-			case 1:
-				y = point_coord;
-				break;
-			case 2:
-				z = point_coord;
-				break;
-		}
-		
-		Point p {x, y, z};
-		points.push_back(p);
 
-		i = (i+1) % 3;
+		file >> x >> y >> z;
+		
+		// Applico la correzione del prof
+		cv::Point3f p {-y, -z, x};
+		// Point p {x, y, z};
+
+		points.push_back(p);
 	}
+
+	std::cout << std::endl;
 
 	file.close();
 	
@@ -134,21 +123,14 @@ Camera read_camera(const std::string& path) {
 	file.open(path.c_str());
 
 	Camera camera;
-	float x, y, z;
 
 	file >> camera.width >> camera.height
 		 >> camera.alpha >> camera.beta
 	     >> camera.u0 >> camera.v0
 		 >> camera.orientation_x >> camera.orientation_y >> camera.orientation_z
-		//  >> x >> y >> z;
-		>> camera.position_x >> camera.position_y >> camera.position_z;
+		 >> camera.position_x >> camera.position_y >> camera.position_z;
 
-	//////////////////////////////////////
-	// I parametri letti sono purtroppo scritti in ordine sbagliato sul file, in questo particolare caso
-	// camera.position_x = -y;
-	// camera.position_y = -z;
-	// camera.position_z = x;
-	//////////////////////////////////////
+	std::cout << std::endl;
 
 	file.close();
 
@@ -156,24 +138,69 @@ Camera read_camera(const std::string& path) {
 }
 
 
+
+// void Project(const std::vector<cv::Point3f>& points, const Camera& params, std::vector<cv::Point2f>& uv_points)
+// {
+//     Eigen::Matrix<float, 4, 4> RT;
+//     cv::Affine3f RT_inv = params.RT.inv();
+    
+//     RT << RT_inv.matrix(0,0), RT_inv.matrix(0,1), RT_inv.matrix(0,2), RT_inv.matrix(0,3), 
+//           RT_inv.matrix(1,0), RT_inv.matrix(1,1), RT_inv.matrix(1,2), RT_inv.matrix(1,3), 
+//           RT_inv.matrix(2,0), RT_inv.matrix(2,1), RT_inv.matrix(2,2), RT_inv.matrix(2,3),
+//                            0,                  0,                  0,                  1;
+    
+//     std::cout << "RT: " << RT << std::endl << std::endl;
+
+//     Eigen::Matrix<float, 3, 4> K;
+//     K << params.alpha, 0, params.u0, 0,
+//          0, params.beta, params.v0, 0,
+//          0, 0, 1, 0;
+    
+//     /**
+//      * YOUR CODE HERE: project points from 3D to 2D
+//      * hint: p' = K*RT*P'
+//      */
+
+//     std::cout << K * RT << std::endl;
+
+//     uv_points.resize(points.size());
+//     for (unsigned int i = 0; i < points.size(); ++i)
+//     {
+//         Eigen::Vector4f point;
+//         point.x() = points[i].x;
+//         point.y() = points[i].y;
+//         point.z() = points[i].z;
+//         point.w() = 1.0;
+        
+//         Eigen::Vector3f uv_point;
+
+//         uv_point = K * RT * point;
+        
+//         uv_points[i].x = uv_point.x() / uv_point.z();
+//         uv_points[i].y = uv_point.y() / uv_point.z();
+//     }
+// }
+
+
+
 int main(int argc, char **argv) {
 	int frame_number = 0;
-	char frame_name[256];
+	// char frame_name[256];	
 	bool exit_loop = false;
 
 	//////////////////////
 	//parse argument list:
 	//////////////////////
-	ArgumentList args;
-	if(!ParseInputs(args, argc, argv)) {
-		return 1;
-	}
+	// ArgumentList args;
+	// if(!ParseInputs(args, argc, argv)) {
+	// 	return 1;
+	// }
 
 	// Lettura punti e parametri camera
 	std::string scan_path("../../data/ex1/data/scan.dat");
-	std::string params_front_path("../../data/ex1/data/params_front.dat");
+	std::string params_front_path("../../data/ex1/data/params_left.dat"); // bug con params_right
 
-	std::vector<Point> points = read_points(scan_path);
+	std::vector<cv::Point3f> points = read_points(scan_path);
 
 	// DEBUG
 	// for(Point& point : points) {
@@ -181,30 +208,15 @@ int main(int argc, char **argv) {
 	// }
 
 	Camera camera = read_camera(params_front_path);
+	// camera.orientation_x += 50.0f;
 	// DEBUG
-	// std::cout << camera.alpha << std::endl;
-
-	while(!exit_loop) {
-		//generating file name
-		//
-		//multi frame case
-		if(args.image_name.find('%') != std::string::npos)
-			sprintf(frame_name,(const char*)(args.image_name.c_str()),frame_number);
-		else //sinfgle frame case
-			sprintf(frame_name,"%s",args.image_name.c_str());
-
-		//opening file
-		std::cout<<"Opening "<<frame_name<<std::endl;
-
-		cv::Mat input_img = cv::imread(frame_name);
-		if(input_img.empty()) {
-			std::cout<<"Unable to open "<<frame_name<<std::endl;
-			return 1;
-		}
-
-
-		//////////////////////
-		//processing code here
+	// std::cout << camera.width << " " << camera.height
+	// 	 << "\n " << camera.alpha << " " << camera.beta
+	//      << "\n " << camera.u0 << " " << camera.v0
+	// 	 << "\n " << camera.orientation_x << " " << camera.orientation_y << " " << camera.orientation_z
+	// 	 << "\n " << camera.position_x << " " << camera.position_y << " " << camera.position_z << std::endl;
+		
+	// while(!exit_loop) {
 		// Costruisco la matrice degli instrinseci K (3x3)
 		float K_data[3][3] = {{camera.alpha, 0.0f, camera.u0},
 						 	  {0.0f, camera.beta, camera.v0},
@@ -215,7 +227,6 @@ int main(int argc, char **argv) {
 		
 		// DEBUG
 		// std::cout << K << std::endl;
-
 
 		// Costruisco la matrice degli estrinseci [R T] (3x4)
 
@@ -250,27 +261,33 @@ int main(int argc, char **argv) {
 
 		cv::Mat T(3, 1, CV_32FC1, T_data);
 
-		// DEBUG
-		// std::cout << T << std::endl;
 
+		// DEBUG
+		// std::cout << "OpenCV T: " << T << std::endl;
 
 		// Calcolo M = K * [R T]
 		cv::Mat RT;
 		hconcat(R, T, RT);
+
+        // std::cout << RT << std::endl;
+
 		cv::Mat M = K * RT;
 
 		//DEBUG
 		std::cout << "M: " << M << std::endl;
 
+		// std::vector<cv::Point2f> uv_points;
+		// Project(points, camera, uv_points);
 		
 		// Dichiaro la matrice in cui visualizzerò il risultato
 		// Inizialmente tutta nera, metterò a bianco i pixel proiettati
-		std::cout << camera.width << " " << camera.height << std::endl;
-		cv::Mat out = cv::Mat::zeros(camera.height, camera.width, CV_8UC1);
 		
+		cv::Mat out = cv::Mat::zeros(camera.height, camera.width, CV_8UC1);
+
 		// Per ogni punto Pw nel mondo, calcolo la sua proiezione 2D tramite la formula P = M * Pw
 		// Torno poi in coordinate euclidee, ottenendo quindi P = (x, y)
-		for(Point& point : points) {
+
+		for(cv::Point3f& point : points) {
 			// trasformo il punto Pw attuale in coordinate omogenee
 			float Pw_data[4][1] = {{point.x}, {point.y}, {point.z}, 1.0f};
 			cv::Mat Pw(4, 1, CV_32FC1, Pw_data);
@@ -282,27 +299,23 @@ int main(int argc, char **argv) {
 			
 			// DEBUG
 			// std::cout << "(" << x << ", " << y << ")" << std::endl;
-
-			std::cout << "(" << x << ", " << y << ")" << std::endl;
+			
 			// Visualizzo il punto solo se rientra nella finestra!
 			if(x > 0 && x < camera.width && y > 0 && y < camera.height) {
 				out.at<u_int8_t>(x, y) = 255;
 				
 			}
 		}
+		
 		/////////////////////
-
-		//display input_img
-		cv::namedWindow("input_img", cv::WINDOW_AUTOSIZE);
-		cv::imshow("input_img", input_img);
-
-		//display out
+		
+		// display out
 		cv::namedWindow("out", cv::WINDOW_AUTOSIZE);
 		cv::imshow("out", out);
 
 		//wait for key or timeout
-		unsigned char key = cv::waitKey(args.wait_t);
-		std::cout<<"key "<<int(key)<<std::endl;
+		unsigned char key = cv::waitKey(0);
+		// std::cout<<"key "<<int(key)<<std::endl;
 
 		//here you can implement some looping logic using key value:
 		// - pause
@@ -311,16 +324,17 @@ int main(int argc, char **argv) {
 		// - step forward
 		// - loop on the same frame
 
-		if(key == 'q')
-			exit_loop = true;
+		// if(key == 'q')
+		// 	exit_loop = true;
 
-		frame_number++;
+		// ++frame_number;
 
 		// Ruoto attorno alla scena
-		camera.orientation_x += 0.05f;
-		camera.orientation_y += 0.05f;
-		camera.orientation_z += 0.05f;
-	}
+
+		// camera.orientation_x += 1.0f;
+		// camera.orientation_y += 0.1f;
+		// camera.orientation_z += 0.1f;
+	// }
 
 	return 0;
 }
