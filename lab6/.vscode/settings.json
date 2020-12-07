@@ -1,6 +1,9 @@
 {
     "files.associations": {
         "complex": "cpp",
-        "limits": "cpp"
+        "limits": "cpp",
+        "ostream": "cpp",
+        "chrono": "cpp",
+        "random": "cpp"
     }
 }
