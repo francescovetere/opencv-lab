@@ -7,7 +7,8 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <cmath> // abs()
+#include <cmath> // std::abs()
+#include <vector> // std::vector
 
 struct ArgumentList {
 	std::string image_L;
@@ -103,7 +104,7 @@ void mySAD_Disparity(const cv::Mat & left_image, const cv::Mat & right_image, in
 ///////////////////////////////////////////
 
 
-// Mia soluzione
+// Mia soluzione ex 1
 void SAD_Disparity(const cv::Mat& L, const cv::Mat& R, unsigned short w_size, cv::Mat& out) {
 	out = cv::Mat::zeros(L.rows, L.cols, CV_8UC1);
 
@@ -146,6 +147,28 @@ void SAD_Disparity(const cv::Mat& L, const cv::Mat& R, unsigned short w_size, cv
 	}
 }
 
+// Mia soluzione ex 2
+void vDisparity(const cv::Mat& disp, cv::Mat& out) {
+	const int range = 128;
+
+	// disp avrà valori compresi tra 0 e 128
+	out.create(disp.rows, range, CV_8UC1);
+
+	// per ogni riga creo un'istogramma delle disparità, inziializzato a 0
+	int histogram[range];
+
+	for(int row_disp = 0; row_disp < disp.rows; ++row_disp) {
+		for(int i = 0; i < range; ++i) histogram[i] = 0;
+		for(int col_disp = 0; col_disp < disp.cols; ++col_disp) {
+			++histogram[disp.at<uint8_t>(row_disp, col_disp)];
+		}
+
+		for(int col_out = 0; col_out < out.cols; ++col_out) {
+			out.at<uint8_t>(row_disp, col_out) = histogram[col_out];
+		}
+	}
+}
+
 int main(int argc, char **argv) {
 	int frame_number = 0;
 	bool exit_loop = false;
@@ -166,7 +189,7 @@ int main(int argc, char **argv) {
 		unsigned short w_size = args.w_size;
 
 		cv::Mat disparity;
-		
+		cv::Mat v_disparity;
 		//////////////////////
 		//processing code here
 
@@ -174,6 +197,7 @@ int main(int argc, char **argv) {
 		SAD_Disparity(image_L, image_R, w_size, disparity);
 		// mySAD_Disparity(image_L, image_R, w_size, disparity);
 
+		vDisparity(disparity, v_disparity);
 		/////////////////////
 
 		//display images
@@ -188,8 +212,13 @@ int main(int argc, char **argv) {
 		disparity = 255*(disparity-minVal) / (maxVal-minVal);
 		cv::namedWindow("disparity (w_size: " + std::to_string(w_size) + ")", cv::WINDOW_AUTOSIZE);
 		cv::imshow("disparity (w_size: " + std::to_string(w_size) + ")", disparity);
-
 		cv::imwrite("disparity (w_size: " + std::to_string(w_size) + ").jpg", disparity);
+
+		v_disparity = 255*(v_disparity-minVal) / (maxVal-minVal);
+		cv::namedWindow("disparity_v (w_size: " + std::to_string(w_size) + ")", cv::WINDOW_AUTOSIZE);
+		cv::imshow("v_disparity (w_size: " + std::to_string(w_size) + ")", v_disparity);
+		cv::imwrite("v_disparity (w_size: " + std::to_string(w_size) + ").jpg", v_disparity);
+
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(0);
 		std::cout<<"key "<<int(key)<<std::endl;
