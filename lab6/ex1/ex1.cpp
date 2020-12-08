@@ -154,17 +154,50 @@ void vDisparity(const cv::Mat& disp, cv::Mat& out) {
 	// disp avrà valori compresi tra 0 e 128
 	out.create(disp.rows, range, CV_8UC1);
 
-	// per ogni riga creo un'istogramma delle disparità, inziializzato a 0
+	// per ogni riga creo un'istogramma delle disparità, inizializzato a 0
 	int histogram[range];
 
 	for(int row_disp = 0; row_disp < disp.rows; ++row_disp) {
 		for(int i = 0; i < range; ++i) histogram[i] = 0;
+
 		for(int col_disp = 0; col_disp < disp.cols; ++col_disp) {
 			++histogram[disp.at<uint8_t>(row_disp, col_disp)];
 		}
 
 		for(int col_out = 0; col_out < out.cols; ++col_out) {
 			out.at<uint8_t>(row_disp, col_out) = histogram[col_out];
+		}
+	}
+}
+
+// Mia soluzione ex 2
+void vDisparity2(const cv::Mat& L, const cv::Mat& R, cv::Mat& out) {
+	const int range = 128;
+
+	// Tengo sempre come range massimo di disparità 128
+	out.create(L.rows, range, CV_8UC1);
+	
+	for(int row_L = 0; row_L < L.rows; ++row_L) {
+		// per ogni riga creo un'istogramma delle disparità, inizializzato a 0
+		int histogram[range];
+		for(int i = 0; i < range; ++i) histogram[i] = 0;
+
+		// per ogni colonna, analizzo i valori dei pixel nelle due immagini
+		for(int col_L = 0; col_L < L.cols; ++col_L) {
+			int val_L = (int)L.at<uint8_t>(row_L, col_L);
+			int val_R = (int)R.at<uint8_t>(row_L, col_L);
+
+			// calcolo la loro differenza, in valore assoluto per evitare differenze negative
+			int disp = std::abs(val_L - val_R);
+			// effettuo un clipping se la differenza è maggiore del massimo range, altrimenti farei segmentation fault sull'istogramma
+			if(disp > 128) disp = 128;
+			
+			++histogram[disp];
+		}
+
+		// Riempo la riga corrente nell'output, con l'istogramma appena calcolato
+		for(int col_out = 0; col_out < out.cols; ++col_out) {
+			out.at<uint8_t>(row_L, col_out) = histogram[col_out];
 		}
 	}
 }
@@ -190,6 +223,7 @@ int main(int argc, char **argv) {
 
 		cv::Mat disparity;
 		cv::Mat v_disparity;
+		cv::Mat v_disparity2;
 		//////////////////////
 		//processing code here
 
@@ -198,6 +232,9 @@ int main(int argc, char **argv) {
 		// mySAD_Disparity(image_L, image_R, w_size, disparity);
 
 		vDisparity(disparity, v_disparity);
+
+		vDisparity2(image_L, image_R, v_disparity2);
+
 		/////////////////////
 
 		//display images
@@ -214,10 +251,17 @@ int main(int argc, char **argv) {
 		cv::imshow("disparity (w_size: " + std::to_string(w_size) + ")", disparity);
 		cv::imwrite("disparity (w_size: " + std::to_string(w_size) + ").jpg", disparity);
 
+		cv::minMaxLoc(v_disparity, &minVal, &maxVal);
 		v_disparity = 255*(v_disparity-minVal) / (maxVal-minVal);
-		cv::namedWindow("disparity_v (w_size: " + std::to_string(w_size) + ")", cv::WINDOW_AUTOSIZE);
+		cv::namedWindow("v_disparity (w_size: " + std::to_string(w_size) + ")", cv::WINDOW_AUTOSIZE);
 		cv::imshow("v_disparity (w_size: " + std::to_string(w_size) + ")", v_disparity);
 		cv::imwrite("v_disparity (w_size: " + std::to_string(w_size) + ").jpg", v_disparity);
+
+		cv::minMaxLoc(v_disparity2, &minVal, &maxVal);
+		v_disparity2 = 255*(v_disparity2-minVal) / (maxVal-minVal);
+		cv::namedWindow("v_disparity2 (w_size: " + std::to_string(w_size) + ")", cv::WINDOW_AUTOSIZE);
+		cv::imshow("v_disparity2 (w_size: " + std::to_string(w_size) + ")", v_disparity2);
+		cv::imwrite("v_disparity2 (w_size: " + std::to_string(w_size) + ").jpg", v_disparity2);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(0);
