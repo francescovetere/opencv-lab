@@ -48,13 +48,25 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/francesco/Desktop/VA/lab/A2/A2_2020
+CMAKE_SOURCE_DIR = /home/francesco/Desktop/VA/lab/A2
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/francesco/Desktop/VA/lab/A2/A2_2020/build
+CMAKE_BINARY_DIR = /home/francesco/Desktop/VA/lab/A2/build
 
 #=============================================================================
 # Targets provided globally by CMake.
+
+# Special rule for the target install/strip
+install/strip: preinstall
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing the project stripped..."
+	/usr/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+.PHONY : install/strip
+
+# Special rule for the target install/strip
+install/strip/fast: preinstall/fast
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing the project stripped..."
+	/usr/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+.PHONY : install/strip/fast
 
 # Special rule for the target install/local
 install/local: preinstall
@@ -112,23 +124,11 @@ edit_cache/fast: edit_cache
 
 .PHONY : edit_cache/fast
 
-# Special rule for the target install/strip
-install/strip: preinstall
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing the project stripped..."
-	/usr/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
-.PHONY : install/strip
-
-# Special rule for the target install/strip
-install/strip/fast: preinstall/fast
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Installing the project stripped..."
-	/usr/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
-.PHONY : install/strip/fast
-
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/francesco/Desktop/VA/lab/A2/A2_2020/build/CMakeFiles /home/francesco/Desktop/VA/lab/A2/A2_2020/build/CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/francesco/Desktop/VA/lab/A2/build/CMakeFiles /home/francesco/Desktop/VA/lab/A2/build/CMakeFiles/progress.marks
 	$(MAKE) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/francesco/Desktop/VA/lab/A2/A2_2020/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/francesco/Desktop/VA/lab/A2/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -157,44 +157,44 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named simple
+# Target rules for targets named A2_313336
 
 # Build rule for target.
-simple: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 simple
-.PHONY : simple
+A2_313336: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 A2_313336
+.PHONY : A2_313336
 
 # fast build rule for target.
-simple/fast:
-	$(MAKE) -f CMakeFiles/simple.dir/build.make CMakeFiles/simple.dir/build
-.PHONY : simple/fast
+A2_313336/fast:
+	$(MAKE) -f CMakeFiles/A2_313336.dir/build.make CMakeFiles/A2_313336.dir/build
+.PHONY : A2_313336/fast
 
-main.o: main.cpp.o
+A2_313336.o: A2_313336.cpp.o
 
-.PHONY : main.o
+.PHONY : A2_313336.o
 
 # target to build an object file
-main.cpp.o:
-	$(MAKE) -f CMakeFiles/simple.dir/build.make CMakeFiles/simple.dir/main.cpp.o
-.PHONY : main.cpp.o
+A2_313336.cpp.o:
+	$(MAKE) -f CMakeFiles/A2_313336.dir/build.make CMakeFiles/A2_313336.dir/A2_313336.cpp.o
+.PHONY : A2_313336.cpp.o
 
-main.i: main.cpp.i
+A2_313336.i: A2_313336.cpp.i
 
-.PHONY : main.i
+.PHONY : A2_313336.i
 
 # target to preprocess a source file
-main.cpp.i:
-	$(MAKE) -f CMakeFiles/simple.dir/build.make CMakeFiles/simple.dir/main.cpp.i
-.PHONY : main.cpp.i
+A2_313336.cpp.i:
+	$(MAKE) -f CMakeFiles/A2_313336.dir/build.make CMakeFiles/A2_313336.dir/A2_313336.cpp.i
+.PHONY : A2_313336.cpp.i
 
-main.s: main.cpp.s
+A2_313336.s: A2_313336.cpp.s
 
-.PHONY : main.s
+.PHONY : A2_313336.s
 
 # target to generate assembly for a file
-main.cpp.s:
-	$(MAKE) -f CMakeFiles/simple.dir/build.make CMakeFiles/simple.dir/main.cpp.s
-.PHONY : main.cpp.s
+A2_313336.cpp.s:
+	$(MAKE) -f CMakeFiles/A2_313336.dir/build.make CMakeFiles/A2_313336.dir/A2_313336.cpp.s
+.PHONY : A2_313336.cpp.s
 
 # Help Target
 help:
@@ -202,16 +202,16 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
+	@echo "... install/strip"
 	@echo "... install/local"
 	@echo "... install"
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
-	@echo "... install/strip"
-	@echo "... simple"
-	@echo "... main.o"
-	@echo "... main.i"
-	@echo "... main.s"
+	@echo "... A2_313336"
+	@echo "... A2_313336.o"
+	@echo "... A2_313336.i"
+	@echo "... A2_313336.s"
 .PHONY : help
 
 
