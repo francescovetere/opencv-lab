@@ -153,8 +153,6 @@ void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int st
 	}
 }
 
-
-
 /**
  * ES 4 - Convoluzione intera
  */
@@ -198,7 +196,6 @@ void gaussianKernel(float sigma, int radius, cv::Mat& kernel) {
 	}
 }
 
-
 /**
  * ES 7 (modificato per ottenere solo le derivate) - Derivata con Sobel 3x3
  */
@@ -223,10 +220,23 @@ void sobel(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) {
 
   
 	// applico le convoluzioni
-	convFloat(image, kernel_sobel_x, derivative_x);
-	convFloat(image, kernel_sobel_y, derivative_y);
+	conv(image, kernel_sobel_x, derivative_x);
+	conv(image, kernel_sobel_y, derivative_y);
 }
 
+// Ricerca massimo locale 3x3
+bool isLocalMaximum(cv::Mat& image, int r, int c)
+{
+		float px = image.at<float>(r,c);
+		bool isMax = true;
+
+		for (int i = -1; i <= 1; i++)
+			for (int j = -1; j <= 1; j++)
+				if (px < image.at<float>(r+i,c+j))
+					isMax = false;
+
+		return isMax;
+}
 
 // Aggiungo un parametro finale per le stampe dei risultati intermedi
 void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & keypoints0, float alpha, float harrisTh, std::string img_name) {
@@ -244,29 +254,94 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
   //
 
   cv::Mat derivative_x, derivative_y;
-  sobel(image, derivative_x, derivative_y);
+  cv::Mat kernel_gauss_horizontal, kernel_gauss_vertical;
+  cv::Mat blurred_image;
+
+  // Prima di effettuare la derivata, eseguo un blur con una gaussiana
+
+  // ******* DA RIVEDERE ************
+  // // Genero i kernel gaussiani orizzontale e verticale
+  // gaussianKernel(1.0f, 2, kernel_gauss_horizontal);
+
+  // // Ottengo il blur gaussiano come composizione di kernel verticale e orizzontale
+  // cv::Mat tmp;
+  // conv(image, kernel_gauss_horizontal, tmp);
+  // cv::transpose(kernel_gauss_horizontal, kernel_gauss_vertical);
+  // conv(tmp, kernel_gauss_vertical, blurred_image);
+  // ********************************
+  
+  cv::GaussianBlur(image, blurred_image, cv::Size(3, 3), 1.0, 1.0);
+
+  // Effettuo la derivata vera e propria
+  sobel(blurred_image, derivative_x, derivative_y);
+
+  // Calcolo le 3 sottomatrici che compongono la matrice M
+  cv::Mat Ix2, Iy2, IxIy;
+  Ix2.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+  Iy2.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+  IxIy.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+
+  Ix2 = derivative_x.mul(derivative_x);
+  Iy2 = derivative_y.mul(derivative_y);
+  IxIy = derivative_x.mul(derivative_y);
+
+  // Calcolo la cornerness function con l'approssimazione vista sulle slide
+  cv::Mat gIx2, gIy2, gIxIy;
+  gIx2.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+  gIy2.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+  gIxIy.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+  
+  cv::GaussianBlur(Ix2, gIx2, cv::Size(3, 3), 1.0, 1.0);
+  cv::GaussianBlur(Iy2, gIy2, cv::Size(3, 3), 1.0, 1.0);
+  cv::GaussianBlur(IxIy, gIxIy, cv::Size(3, 3), 1.0, 1.0);
+
+  cv::Mat harrisResponse(image.rows, image.cols, CV_32FC1);
+	harrisResponse = gIx2.mul(gIy2) - gIxIy.mul(gIxIy) - ( alpha * ((gIx2 + gIy2).mul(gIx2 + gIy2)) );
+
+	// NON-MAXIMUM SUPPRESSION
+	for (int r = 1; r < harrisResponse.rows - 1; r++)
+		for (int c = 1; c < harrisResponse.cols - 1; c++)
+				if (harrisResponse.at<float>(r,c) > harrisTh && isLocalMaximum(harrisResponse, r, c))
+						keypoints0.push_back( cv::KeyPoint(float(c), float(r), 3.f) );
 
   // Visualizzazione passaggi intermedi
-  contrast_stretching(derivative_x.clone(), derivative_x, CV_8UC1, 255.0f);
-  cv::namedWindow(img_name + "derivative_x", cv::WINDOW_AUTOSIZE);
-  cv::imshow(img_name + "derivative_x", derivative_x);
+  // cv::namedWindow(img_name + "_blurred", cv::WINDOW_AUTOSIZE);
+  // cv::imshow(img_name + "_blurred", blurred_image);
 
-  contrast_stretching(derivative_y.clone(), derivative_y, CV_8UC1, 255.0f);
-  cv::namedWindow(img_name + "derivative_y", cv::WINDOW_AUTOSIZE);
-  cv::imshow(img_name + "derivative_y", derivative_y);
+  // // contrast_stretching(derivative_x.clone(), derivative_x, CV_8UC1, 255);
+  // cv::namedWindow(img_name + "_derivative_x", cv::WINDOW_AUTOSIZE);
+  // cv::imshow(img_name + "_derivative_x", derivative_x);
+
+  // // contrast_stretching(derivative_y.clone(), derivative_y, CV_8UC1, 255);
+  // cv::namedWindow(img_name + "_derivative_y", cv::WINDOW_AUTOSIZE);
+  // cv::imshow(img_name + "_derivative_y", derivative_y);
+
+  cv::namedWindow(img_name + "_Ix2", cv::WINDOW_AUTOSIZE);
+  cv::imshow(img_name + "_Ix2", Ix2);
+  cv::namedWindow(img_name + "_Iy2", cv::WINDOW_AUTOSIZE);
+  cv::imshow(img_name + "_Iy2", Iy2);
+  cv::namedWindow(img_name + "_IxIy", cv::WINDOW_AUTOSIZE);
+  cv::imshow(img_name + "_IxIy", IxIy);
+
+  cv::namedWindow(img_name + "_gIx2", cv::WINDOW_AUTOSIZE);
+  cv::imshow(img_name + "_gIx2", gIx2);
+  cv::namedWindow(img_name + "_gIy2", cv::WINDOW_AUTOSIZE);
+  cv::imshow(img_name + "_gIy2", gIy2);
+  cv::namedWindow(img_name + "_gIxIy", cv::WINDOW_AUTOSIZE);
+  cv::imshow(img_name + "_gIxIy", gIxIy);
 
   // Disegnate tutti i risultati intermedi per capire se le cose funzionano
   //
   // Per la response di Harris:
-  //    cv::Mat adjMap;
-  //    cv::Mat falseColorsMap;
-  //    double minr,maxr;
-  //
-  //    cv::minMaxLoc(response1(roi), &minr, &maxr);
-  //    cv::convertScaleAbs(response1(roi), adjMap, 255 / (maxr-minr));
-  //    cv::applyColorMap(adjMap, falseColorsMap, cv::COLORMAP_RAINBOW);
-  //    cv::namedWindow("response1", cv::WINDOW_NORMAL);
-  //    cv::imshow("response1", falseColorsMap);
+     cv::Mat adjMap;
+     cv::Mat falseColorsMap;
+     double minr,maxr;
+  
+     cv::minMaxLoc(harrisResponse, &minr, &maxr);
+     cv::convertScaleAbs(harrisResponse, adjMap, 255 / (maxr-minr));
+     cv::applyColorMap(adjMap, falseColorsMap, cv::COLORMAP_RAINBOW);
+     cv::namedWindow("response1", cv::WINDOW_NORMAL);
+     cv::imshow("response1", falseColorsMap);
 
   // HARRIS CORNER END
   ////////////////////////////////////////////////////////
