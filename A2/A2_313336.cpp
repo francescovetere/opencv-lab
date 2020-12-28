@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <random>
 #include <iterator>
+#include <cstdlib> /* srand, rand */
 
 // eigen
 #include <eigen3/Eigen/Core>
@@ -220,8 +221,8 @@ void sobel(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) {
 
   
 	// applico le convoluzioni
-	conv(image, kernel_sobel_x, derivative_x);
-	conv(image, kernel_sobel_y, derivative_y);
+	convFloat(image, kernel_sobel_x, derivative_x);
+	convFloat(image, kernel_sobel_y, derivative_y);
 }
 
 // Ricerca massimo locale 3x3
@@ -238,28 +239,30 @@ bool isLocalMaximum(cv::Mat& image, int r, int c)
 		return isMax;
 }
 
+// Stampa immagini
+void display(std::string name, cv::Mat image) {
+	int type = image.type();
+
+	if(type == CV_32FC1)
+    contrast_stretching(image.clone(), image, CV_8UC1, 255.0f);
+
+	cv::imshow(name, image);
+}
+
 // Aggiungo un parametro finale per le stampe dei risultati intermedi
 void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & keypoints0, float alpha, float harrisTh, std::string img_name) {
-  /**********************************
-   *
-   * PLACE YOUR CODE HERE
-   *
-   *
-   *
-   * E' ovviamente vietato utilizzare un detector di OpenCv....
-   *
-   */
   ////////////////////////////////////////////////////////
   /// HARRIS CORNER
   //
 
-  cv::Mat derivative_x, derivative_y;
-  cv::Mat kernel_gauss_horizontal, kernel_gauss_vertical;
-  cv::Mat blurred_image;
+  cv::Mat Ix, Iy;
 
   // Prima di effettuare la derivata, eseguo un blur con una gaussiana
+  cv::Mat blurred_image;
 
   // ******* DA RIVEDERE ************
+  // cv::Mat kernel_gauss_horizontal, kernel_gauss_vertical;
+  
   // // Genero i kernel gaussiani orizzontale e verticale
   // gaussianKernel(1.0f, 2, kernel_gauss_horizontal);
 
@@ -273,75 +276,58 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
   cv::GaussianBlur(image, blurred_image, cv::Size(3, 3), 1.0, 1.0);
 
   // Effettuo la derivata vera e propria
-  sobel(blurred_image, derivative_x, derivative_y);
+  sobel(blurred_image, Ix, Iy);
 
   // Calcolo le 3 sottomatrici che compongono la matrice M
   cv::Mat Ix2, Iy2, IxIy;
-  Ix2.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
-  Iy2.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
-  IxIy.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+  Ix2.create(Ix.rows, Ix.cols, CV_32FC1);
+  Iy2.create(Iy.rows, Iy.cols, CV_32FC1);
+  IxIy.create(Ix.rows, Ix.cols, CV_32FC1);
 
-  Ix2 = derivative_x.mul(derivative_x);
-  Iy2 = derivative_y.mul(derivative_y);
-  IxIy = derivative_x.mul(derivative_y);
+  Ix2 = Ix.mul(Ix);
+  Iy2 = Iy.mul(Iy);
+  IxIy = Ix.mul(Iy);
 
   // Calcolo la cornerness function con l'approssimazione vista sulle slide
   cv::Mat gIx2, gIy2, gIxIy;
-  gIx2.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
-  gIy2.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
-  gIxIy.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+  gIx2.create(Ix2.rows, Ix2.cols, CV_32FC1);
+  gIy2.create(Iy2.rows, Iy2.cols, CV_32FC1);
+  gIxIy.create(IxIy.rows, IxIy.cols, CV_32FC1);
   
   cv::GaussianBlur(Ix2, gIx2, cv::Size(3, 3), 1.0, 1.0);
   cv::GaussianBlur(Iy2, gIy2, cv::Size(3, 3), 1.0, 1.0);
   cv::GaussianBlur(IxIy, gIxIy, cv::Size(3, 3), 1.0, 1.0);
 
-  cv::Mat harrisResponse(image.rows, image.cols, CV_32FC1);
-	harrisResponse = gIx2.mul(gIy2) - gIxIy.mul(gIxIy) - ( alpha * ((gIx2 + gIy2).mul(gIx2 + gIy2)) );
+  cv::Mat response;
+  response.create(gIx2.rows, gIx2.cols, CV_32FC1);
+	response = gIx2.mul(gIy2) - gIxIy.mul(gIxIy) - alpha * (gIx2 + gIy2).mul(gIx2 + gIy2);
 
 	// NON-MAXIMUM SUPPRESSION
-	for (int r = 1; r < harrisResponse.rows - 1; r++)
-		for (int c = 1; c < harrisResponse.cols - 1; c++)
-				if (harrisResponse.at<float>(r,c) > harrisTh && isLocalMaximum(harrisResponse, r, c))
+	for (int r = 1; r < response.rows - 1; r++)
+		for (int c = 1; c < response.cols - 1; c++)
+				if (response.at<float>(r,c) > harrisTh && isLocalMaximum(response, r, c))
 						keypoints0.push_back( cv::KeyPoint(float(c), float(r), 3.f) );
 
   // Visualizzazione passaggi intermedi
-  // cv::namedWindow(img_name + "_blurred", cv::WINDOW_AUTOSIZE);
-  // cv::imshow(img_name + "_blurred", blurred_image);
+  /*
+  display("Ix2", Ix2);
+  display("Iy2", Iy2);
+  display("IxIy", IxIy);
 
-  // // contrast_stretching(derivative_x.clone(), derivative_x, CV_8UC1, 255);
-  // cv::namedWindow(img_name + "_derivative_x", cv::WINDOW_AUTOSIZE);
-  // cv::imshow(img_name + "_derivative_x", derivative_x);
+  display("gIx2", gIx2);
+  display("gIy2", gIy2);
+  display("gIxIy", gIxIy);
 
-  // // contrast_stretching(derivative_y.clone(), derivative_y, CV_8UC1, 255);
-  // cv::namedWindow(img_name + "_derivative_y", cv::WINDOW_AUTOSIZE);
-  // cv::imshow(img_name + "_derivative_y", derivative_y);
-
-  cv::namedWindow(img_name + "_Ix2", cv::WINDOW_AUTOSIZE);
-  cv::imshow(img_name + "_Ix2", Ix2);
-  cv::namedWindow(img_name + "_Iy2", cv::WINDOW_AUTOSIZE);
-  cv::imshow(img_name + "_Iy2", Iy2);
-  cv::namedWindow(img_name + "_IxIy", cv::WINDOW_AUTOSIZE);
-  cv::imshow(img_name + "_IxIy", IxIy);
-
-  cv::namedWindow(img_name + "_gIx2", cv::WINDOW_AUTOSIZE);
-  cv::imshow(img_name + "_gIx2", gIx2);
-  cv::namedWindow(img_name + "_gIy2", cv::WINDOW_AUTOSIZE);
-  cv::imshow(img_name + "_gIy2", gIy2);
-  cv::namedWindow(img_name + "_gIxIy", cv::WINDOW_AUTOSIZE);
-  cv::imshow(img_name + "_gIxIy", gIxIy);
-
-  // Disegnate tutti i risultati intermedi per capire se le cose funzionano
-  //
-  // Per la response di Harris:
-     cv::Mat adjMap;
-     cv::Mat falseColorsMap;
-     double minr,maxr;
-  
-     cv::minMaxLoc(harrisResponse, &minr, &maxr);
-     cv::convertScaleAbs(harrisResponse, adjMap, 255 / (maxr-minr));
-     cv::applyColorMap(adjMap, falseColorsMap, cv::COLORMAP_RAINBOW);
-     cv::namedWindow("response1", cv::WINDOW_NORMAL);
-     cv::imshow("response1", falseColorsMap);
+  // Per la response di Harris
+  cv::Mat adjMap;
+  cv::Mat falseColorsMap;
+  double minr,maxr;
+  cv::minMaxLoc(response, &minr, &maxr);
+  cv::convertScaleAbs(response, adjMap, 255 / (maxr-minr));
+  cv::applyColorMap(adjMap, falseColorsMap, cv::COLORMAP_RAINBOW);
+  cv::namedWindow("response", cv::WINDOW_NORMAL);
+  cv::imshow("response", falseColorsMap);
+  */
 
   // HARRIS CORNER END
   ////////////////////////////////////////////////////////
@@ -391,6 +377,95 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
    *      myFindHomographySVD( cv::Mat(sample[1]), cv::Mat(sample[0]), HR);
    *
    */
+
+  std::cout << points0.size() << " " << points1.size() << " " << matches.size() << std::endl;
+  // Inizializza seme random
+  srand(time(NULL));
+
+  // Vector contenenti i 4 match casuali presi da points0 e points1
+  int n_samples = 4;
+  std::vector<cv::Point2f> sample0, sample1;
+      cv::Mat p0, p1;
+      std::vector<cv::Point2f> inliers0, inliers1, inliersBest0, inliersBest1;
+
+  for(int ransac_iteration = 0; ransac_iteration < N; ++ransac_iteration) {
+
+    // Seleziono i 4 match casuali
+    for(int i = 0; i < n_samples; ++i) {
+      int index = rand() % n_samples;
+      
+      // std::cout << index << std::endl;
+
+      sample0.push_back(points0[index]);
+      sample1.push_back(points1[index]);
+    }
+    
+    std::cout << sample0.size() << " " << sample1.size() << std::endl;
+    H = cv::findHomography(cv::Mat(sample1), cv::Mat(sample0), 0);
+
+  	// // Controllo sulla norma |p0, Hp1| < epsilon
+		// for(int i = 0; i < sample0.size(); i++) {
+      
+		// 	p0 = cv::Mat(1, 2, CV_64FC1);
+		// 	p1 = cv::Mat(3, 1, CV_64FC1);
+
+		// 	p0.at<double>(0,0) = points0[i].x;
+		// 	p0.at<double>(0,1) = points0[i].y;
+
+		// 	p1.at<double>(0,0) = points1[i].x;
+		// 	p1.at<double>(1,0) = points1[i].y;
+		// 	p1.at<double>(2,0) = 1;
+
+		// 	cv::Mat Hp1Omog = H * p1;
+
+		// 	// Normalizzazione
+		// 	Hp1Omog /= Hp1Omog.at<double>(2,0);
+
+		// 	cv::Mat Hp1 = cv::Mat(2, 1, CV_64FC1);
+
+		// 	Hp1.at<double>(0,0) = Hp1Omog.at<double>(0,0);
+		// 	Hp1.at<double>(1,0) = Hp1Omog.at<double>(1,0);
+
+		// 	cv::Point2d point0;
+		// 	point0.x = p0.at<double>(0,0);
+		// 	point0.y = p0.at<double>(0,1);
+
+		// 	cv::Point2d Hpoint1;
+		// 	Hpoint1.x = Hp1.at<double>(0,0);
+		// 	Hpoint1.y = Hp1.at<double>(1,0);
+
+		// 	if (cv::norm(cv::Mat(point0), cv::Mat(Hpoint1)) < epsilon)
+		// 	{
+		// 		inliers0.push_back(points0[i]);
+		// 		inliers1.push_back(points1[i]);
+		// 	}
+		// }
+
+		// // aggiornamento nuovi migliori inliers se necessario
+		// if (inliers0.size() > inliersBest0.size()) {
+		// 	inliersBest0.clear();
+		// 	inliersBest1.clear();
+
+		// 	inliersBest0 = inliers0;
+		// 	inliersBest1 = inliers1;
+		// }
+
+
+		// Svuotamento vettori
+		sample0.clear();
+		sample1.clear();
+		inliers0.clear();
+		inliers1.clear();
+  }
+
+  // // Calcolo di H con i migliori inliers
+	// H = cv::findHomography(cv::Mat(inliersBest1), cv::Mat(inliersBest0), 0);
+
+  // 	// Riempimento di matches
+	// for (int i = 0; i < inliersBest0.size(); i++)
+	// 	for (int j = 0; j < points0.size(); j++)
+	// 		if (inliersBest0[i] == points0[j] && inliersBest1[i] == points1[j])
+	// 			matchesInlierBest.push_back(matches[j]);
 }
 
 
@@ -422,7 +497,7 @@ int main(int argc, char **argv) {
   /// HARRIS CORNER
   //
   float alpha = 0.04;
-  float harrisTh = 500000;    //da impostare in base alla propria implementazione!!!!!
+  float harrisTh = 500000*120;    //da impostare in base alla propria implementazione!!!!!
 
   std::vector<cv::KeyPoint> keypoints0, keypoints1;
 
@@ -490,7 +565,7 @@ int main(int argc, char **argv) {
   //matcher.radiusMatch(descriptors0, descriptors1, matches, input.cols*2.0);
   matcher.match(descriptors0, descriptors1, matchesDraw);
 
-  //copio i match dentro a dei semplici vettori oint2f
+  //copio i match dentro a dei semplici vettori Point2f
   std::vector<cv::Point2f> points[2];
   for(unsigned int i=0; i<matchesDraw.size(); ++i) {
     points[0].push_back(keypoints0.at(matchesDraw.at(i).queryIdx).pt);
@@ -529,7 +604,7 @@ int main(int argc, char **argv) {
     float epsilon = 3;      //distanza per il calcolo degli inliers
 
 
-    // Dimensione del sample per RANSAC, quiesto e' fissato
+    // Dimensione del sample per RANSAC, questo e' fissato
     //
     int sample_size = 4;    //dimensione del sample di RANSAC
 
@@ -541,16 +616,16 @@ int main(int argc, char **argv) {
     // Inizialmente utilizzare questa chiamata OpenCV, che utilizza RANSAC, per verificare i vostri corner di Harris
     //
     //
-    cv::Mat mask;
-    H = cv::findHomography( cv::Mat(points[1]), cv::Mat(points[0]), cv::RANSAC, 3, mask);
-    for(std::size_t i=0;i<matchesDraw.size();++i)
-      if(mask.at<uchar>(0,i) == 1) matchesInliersBest.push_back(matchesDraw[i]);
+    // cv::Mat mask;
+    // H = cv::findHomography( cv::Mat(points[1]), cv::Mat(points[0]), cv::RANSAC, 3, mask);
+    // for(std::size_t i=0;i<matchesDraw.size();++i)
+    //   if(mask.at<uchar>(0,i) == 1) matchesInliersBest.push_back(matchesDraw[i]);
     //
     //
     //
     // Una volta che i vostri corner di Harris sono funzionanti, commentare il blocco sopra e abilitare la vostra myFindHomographyRansac
     //
-    //myFindHomographyRansac(points[1], points[0], matchesDraw, N, epsilon, sample_size, H, matchesInliersBest);
+    myFindHomographyRansac(points[1], points[0], matchesDraw, N, epsilon, sample_size, H, matchesInliersBest);
     //
     //
     //
@@ -649,17 +724,17 @@ int main(int argc, char **argv) {
   // cv::namedWindow("BookCover", cv::WINDOW_AUTOSIZE);
   // cv::imshow("BookCover", cover);
 
-  cv::namedWindow("inputKeypoints", cv::WINDOW_AUTOSIZE);
-  cv::imshow("inputKeypoints", inputKeypoints);
+  // cv::namedWindow("inputKeypoints", cv::WINDOW_AUTOSIZE);
+  // cv::imshow("inputKeypoints", inputKeypoints);
 
-  cv::namedWindow("coverKeypoints", cv::WINDOW_AUTOSIZE);
-  cv::imshow("coverKeypoints", coverKeypoints);
+  // cv::namedWindow("coverKeypoints", cv::WINDOW_AUTOSIZE);
+  // cv::imshow("coverKeypoints", coverKeypoints);
 
-  // cv::namedWindow("Matches", cv::WINDOW_AUTOSIZE); // tutti i match, sia sensati che non
-  // cv::imshow("Matches", outMatches);
+  cv::namedWindow("Matches", cv::WINDOW_AUTOSIZE); // tutti i match, sia sensati che non
+  cv::imshow("Matches", outMatches);
 
-  // cv::namedWindow("Matches Inliers", cv::WINDOW_AUTOSIZE); // solo i match sensati
-  // cv::imshow("Matches Inliers", outInliers);
+  cv::namedWindow("Matches Inliers", cv::WINDOW_AUTOSIZE); // solo i match sensati
+  cv::imshow("Matches Inliers", outInliers);
 
   cv::waitKey();
 
