@@ -2,37 +2,23 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/calib3d.hpp>
 
-// #define USE_OPENCVVIZ
+//#define USE_OPENCVVIZ
 
 #ifdef USE_OPENCVVIZ
 #include <opencv2/viz.hpp>
 #endif
 
-
-
-
-
-
 struct CameraParams
 {
     // size
     int w, h;
+
     // intrinsics
     float ku, kv;
     float u0, v0;
+
     // estrinsics
     cv::Affine3f RT;
-    
-    cv::Matx33f K()
-    {
-        cv::Matx33f K = cv::Matx33f::zeros();
-        K(0,0) = ku;
-        K(1,1) = kv;
-        K(0,2) = u0;
-        K(1,2) = v0;
-        K(2,2) = 1;
-    }
-    
 };
 
 void LoadPoints(const std::string& filename, std::vector< cv::Point3f >& points)
@@ -125,33 +111,35 @@ void DrawPixels(const std::vector< cv::Point2f >& uv_points, cv::Mat& image)
     {
         float u = uv_points[i].x;
         float v = uv_points[i].y;
-        
-        if (u > 0 && u < 640 && v > 0 && v < 480)
+
+        if (u > 0 && u < image.cols && v > 0 && v < image.rows)
         {
             image.at<float>(v,u) = 1.0f;
         }
     }
 }
 
-// cv::viz::Viz3d Viz3D(const CameraParams& params) 
-// {
-//     // for visualization
-//     cv::viz::Viz3d win("3D view");
-//     win.setWindowSize(cv::Size(800, 600));
+#ifdef USE_OPENCVVIZ
+cv::viz::Viz3d Viz3D(const CameraParams& params) 
+{
+    // for visualization
+    cv::viz::Viz3d win("3D view");
+    win.setWindowSize(cv::Size(800, 600));
     
-//     // camera frame
-//     cv::viz::WCameraPosition cpw(0.5);
-//     win.showWidget("cam", cpw, params.RT);
-//     cv::viz::WCameraPosition cpw_frustum(cv::Vec2f(atan2(params.w/2, params.ku), atan2(params.h/2, params.kv))); // Camera frustum
-//     win.showWidget("cam_frustum", cpw_frustum, params.RT);
+    // camera frame
+    cv::viz::WCameraPosition cpw(0.5);
+    win.showWidget("cam", cpw, params.RT);
+    cv::viz::WCameraPosition cpw_frustum(cv::Vec2f(atan2(params.w/2, params.ku), atan2(params.h/2, params.kv))); // Camera frustum
+    win.showWidget("cam_frustum", cpw_frustum, params.RT);
     
-//     // world frame
-//     win.showWidget("Coordinate Widget", cv::viz::WCoordinateSystem());
+    // world frame
+    win.showWidget("Coordinate Widget", cv::viz::WCoordinateSystem());
      
-//     // specify window camera pose
-//     cv::Affine3f world_T_win_cam;
-//     PoseToAffine(0.05, 0.0, 0, 0, -5, -30, world_T_win_cam);
-//     win.setViewerPose(world_T_win_cam);
+    // specify window camera pose
+    cv::Affine3f world_T_win_cam;
+    PoseToAffine(0.05, 0.0, 0, 0, -5, -30, world_T_win_cam);
+    win.setViewerPose(world_T_win_cam);
         
-//     return win;
-// }
+    return win;
+}
+#endif
