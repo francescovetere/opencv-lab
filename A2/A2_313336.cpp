@@ -19,7 +19,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <algorithm>
+#include <algorithm> /* find */
 #include <random>
 #include <iterator>
 #include <cstdlib> /* srand, rand */
@@ -379,93 +379,97 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
    */
 
   std::cout << points0.size() << " " << points1.size() << " " << matches.size() << std::endl;
+
   // Inizializza seme random
   srand(time(NULL));
 
-  // Vector contenenti i 4 match casuali presi da points0 e points1
-  int n_samples = 4;
+  // vector contenenti i 4 match casuali presi da points0 e points1
   std::vector<cv::Point2f> sample0, sample1;
-      cv::Mat p0, p1;
-      std::vector<cv::Point2f> inliers0, inliers1, inliersBest0, inliersBest1;
+  std::vector<cv::Point2f> currInliers0, currInliers1, bestInliers0, bestInliers1;
+
+  // vector dei numeri randomici scelti per gli indici, utile per controllare di non scegliere lo stesso indice più volte!
+  std::vector<int> randoms;
+
+  std::vector<int> inliers(N, 0);
 
   for(int ransac_iteration = 0; ransac_iteration < N; ++ransac_iteration) {
-
+    std::cout << ransac_iteration << std::endl;
     // Seleziono i 4 match casuali
-    for(int i = 0; i < n_samples; ++i) {
-      int index = rand() % n_samples;
+    for(int i = 0; i < sample_size; ++i) {
+      // Scelgo l'indice random se e solo se non è gia' stato scelto! Altrimenti potrei selezionare gli stessi punti
+      // E questo porterebbe ad avere una omografia chiaramente sbagliata
+      int index;
+      do {index = rand() % points1.size();}
+      while(std::find(randoms.begin(), randoms.end(), index) != randoms.end());
       
+      // In uscita dal while, sono sicuro di avere ottenuto un random diverso dai precedenti
       // std::cout << index << std::endl;
+      randoms.push_back(index);
 
       sample0.push_back(points0[index]);
       sample1.push_back(points1[index]);
     }
-    
-    std::cout << sample0.size() << " " << sample1.size() << std::endl;
-    H = cv::findHomography(cv::Mat(sample1), cv::Mat(sample0), 0);
 
-  	// // Controllo sulla norma |p0, Hp1| < epsilon
-		// for(int i = 0; i < sample0.size(); i++) {
-      
-		// 	p0 = cv::Mat(1, 2, CV_64FC1);
-		// 	p1 = cv::Mat(3, 1, CV_64FC1);
+    // for(int i = 0; i < sample0.size(); ++i) std::cout << sample0[i] << " ";
+    // std::cout << "\n";
+    // for(int i = 0; i < sample1.size(); ++i) std::cout << sample1[i] << " ";
+    // std::cout << std::endl;
 
-		// 	p0.at<double>(0,0) = points0[i].x;
-		// 	p0.at<double>(0,1) = points0[i].y;
+    // Calcolo l'omografia coi samples scelti randomicamente
+    H = cv::findHomography(sample1, sample0, 0);
 
-		// 	p1.at<double>(0,0) = points1[i].x;
-		// 	p1.at<double>(1,0) = points1[i].y;
-		// 	p1.at<double>(2,0) = 1;
+    // Controllo quanti inliers rispettano l'omografia
+    for(int i = 0; i < points0.size(); ++i) {
+      for(int j = 0; j < points1.size(); ++j) {
+        cv::Mat p0(3, 1, CV_64FC1);
+        cv::Mat p1(3, 1, CV_64FC1);
+          
+        // Trasformo in coord omogenee
+        p0.at<double>(0,0) = points0[i].x;
+		    p0.at<double>(1,0) = points0[i].y;
+		    p0.at<double>(2,0) = 1;
 
-		// 	cv::Mat Hp1Omog = H * p1;
+        p1.at<double>(0,0) = points1[j].x;
+		    p1.at<double>(1,0) = points1[j].y;
+		    p1.at<double>(2,0) = 1;
 
-		// 	// Normalizzazione
-		// 	Hp1Omog /= Hp1Omog.at<double>(2,0);
+        // std::cout << "p0: " << p1 << std::endl;
+        // std::cout << "p1: " << p1 << std::endl;
+        cv::Mat Hp1 = H*p1;
+        // std::cout << "H*p1: " << Hp1 << std::endl;
 
-		// 	cv::Mat Hp1 = cv::Mat(2, 1, CV_64FC1);
+        // Se |p0, Hp1| < epsilon ==> aumento numero di inliers
+        if(cv::norm(p0, Hp1) < epsilon) {
+          currInliers0.push_back(points0[i]);
+          currInliers1.push_back(points1[i]);
+        }
+      }
+    }
 
-		// 	Hp1.at<double>(0,0) = Hp1Omog.at<double>(0,0);
-		// 	Hp1.at<double>(1,0) = Hp1Omog.at<double>(1,0);
+    // aggiornamento nuovi migliori inliers se necessario
+	  if (currInliers0.size() > bestInliers0.size()) {
+			bestInliers0.clear(); bestInliers0 = currInliers0;
+			bestInliers1.clear(); bestInliers1 = currInliers1;
+		}
 
-		// 	cv::Point2d point0;
-		// 	point0.x = p0.at<double>(0,0);
-		// 	point0.y = p0.at<double>(0,1);
-
-		// 	cv::Point2d Hpoint1;
-		// 	Hpoint1.x = Hp1.at<double>(0,0);
-		// 	Hpoint1.y = Hp1.at<double>(1,0);
-
-		// 	if (cv::norm(cv::Mat(point0), cv::Mat(Hpoint1)) < epsilon)
-		// 	{
-		// 		inliers0.push_back(points0[i]);
-		// 		inliers1.push_back(points1[i]);
-		// 	}
-		// }
-
-		// // aggiornamento nuovi migliori inliers se necessario
-		// if (inliers0.size() > inliersBest0.size()) {
-		// 	inliersBest0.clear();
-		// 	inliersBest1.clear();
-
-		// 	inliersBest0 = inliers0;
-		// 	inliersBest1 = inliers1;
-		// }
-
-
-		// Svuotamento vettori
+	  // Svuotamento vettori
+    randoms.clear();
 		sample0.clear();
 		sample1.clear();
-		inliers0.clear();
-		inliers1.clear();
-  }
+		currInliers0.clear();
+		currInliers1.clear();
+  } // fine for
 
-  // // Calcolo di H con i migliori inliers
-	// H = cv::findHomography(cv::Mat(inliersBest1), cv::Mat(inliersBest0), 0);
+  // Ricalcolo H coi migliori inliers trovati da ransac
+  H = cv::findHomography(bestInliers0, bestInliers1, 0);
 
-  // 	// Riempimento di matches
-	// for (int i = 0; i < inliersBest0.size(); i++)
-	// 	for (int j = 0; j < points0.size(); j++)
-	// 		if (inliersBest0[i] == points0[j] && inliersBest1[i] == points1[j])
-	// 			matchesInlierBest.push_back(matches[j]);
+  std::cout << H << std::endl;
+
+  // Riempimento di matches
+	for (int i = 0; i < bestInliers0.size(); i++)
+		for (int j = 0; j < points0.size(); j++)
+			if (bestInliers0[i] == points0[j] && bestInliers1[i] == points1[j])
+				matchesInlierBest.push_back(matches[j]);
 }
 
 
@@ -507,22 +511,22 @@ int main(int argc, char **argv) {
   //
   // Da commentare e sostituire con la propria implementazione
   //
-  // {
-  //   std::vector<cv::Point2f> corners;
-  //   int maxCorners = 0;
-  //   double qualityLevel = 0.01;
-  //   double minDistance = 10;
-  //   int blockSize = 3;
-  //   bool useHarrisDetector = true;
-  //   double k = 0.04;
+  {
+    std::vector<cv::Point2f> corners;
+    int maxCorners = 0;
+    double qualityLevel = 0.01;
+    double minDistance = 10;
+    int blockSize = 3;
+    bool useHarrisDetector = true;
+    double k = 0.04;
 
-  //   cv::goodFeaturesToTrack( input,corners,maxCorners,qualityLevel,minDistance,cv::noArray(),blockSize,useHarrisDetector,k ); // estrae strong feature (k -> alpha)
-  //   std::transform(corners.begin(), corners.end(), std::back_inserter(keypoints0), [](const cv::Point2f & p){ return cv::KeyPoint(p.x,p.y,3.0);} ); // applica funzione a range vector e memorizza in altro range 3->size del keypoint
+    cv::goodFeaturesToTrack( input,corners,maxCorners,qualityLevel,minDistance,cv::noArray(),blockSize,useHarrisDetector,k ); // estrae strong feature (k -> alpha)
+    std::transform(corners.begin(), corners.end(), std::back_inserter(keypoints0), [](const cv::Point2f & p){ return cv::KeyPoint(p.x,p.y,3.0);} ); // applica funzione a range vector e memorizza in altro range 3->size del keypoint
 
-  //   corners.clear();
-  //   cv::goodFeaturesToTrack( cover, corners, maxCorners, qualityLevel, minDistance, cv::noArray(), blockSize, useHarrisDetector, k );
-  //   std::transform(corners.begin(), corners.end(), std::back_inserter(keypoints1), [](const cv::Point2f & p){ return cv::KeyPoint(p.x,p.y,3.0);} );
-  // }
+    corners.clear();
+    cv::goodFeaturesToTrack( cover, corners, maxCorners, qualityLevel, minDistance, cv::noArray(), blockSize, useHarrisDetector, k );
+    std::transform(corners.begin(), corners.end(), std::back_inserter(keypoints1), [](const cv::Point2f & p){ return cv::KeyPoint(p.x,p.y,3.0);} );
+  }
   //
   //
   //
@@ -530,8 +534,8 @@ int main(int argc, char **argv) {
   //
   //
   // (Aggiungo un parametro finale per stampare a video il nome dell'immagine nei risultati temporanei)
-  myHarrisCornerDetector(input, keypoints0, alpha, harrisTh, "input");
-  myHarrisCornerDetector(cover, keypoints1, alpha, harrisTh, "cover");
+  // myHarrisCornerDetector(input, keypoints0, alpha, harrisTh, "input");
+  // myHarrisCornerDetector(cover, keypoints1, alpha, harrisTh, "cover");
   //
   //
   //
@@ -558,7 +562,7 @@ int main(int argc, char **argv) {
   extractor->compute(input, keypoints0, descriptors0);
   extractor->compute(cover, keypoints1, descriptors1);
 
-  //associamo i descrittori tra me due immagini
+  //associamo i descrittori tra le due immagini
   std::vector<std::vector<cv::DMatch> > matches;
   std::vector<cv::DMatch> matchesDraw;
   cv::BFMatcher matcher = cv::BFMatcher(cv::NORM_HAMMING); // brute force matcher (TODO aggiornare con .create()), usa hamming distance tra vettori
@@ -625,6 +629,7 @@ int main(int argc, char **argv) {
     //
     // Una volta che i vostri corner di Harris sono funzionanti, commentare il blocco sopra e abilitare la vostra myFindHomographyRansac
     //
+
     myFindHomographyRansac(points[1], points[0], matchesDraw, N, epsilon, sample_size, H, matchesInliersBest);
     //
     //
