@@ -393,7 +393,7 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
   std::vector<int> inliers(N, 0);
 
   for(int ransac_iteration = 0; ransac_iteration < N; ++ransac_iteration) {
-    std::cout << ransac_iteration << std::endl;
+    // std::cout << ransac_iteration << std::endl;
     // Seleziono i 4 match casuali
     for(int i = 0; i < sample_size; ++i) {
       // Scelgo l'indice random se e solo se non è gia' stato scelto! Altrimenti potrei selezionare gli stessi punti
@@ -420,30 +420,34 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
 
     // Controllo quanti inliers rispettano l'omografia
     for(int i = 0; i < points0.size(); ++i) {
-      for(int j = 0; j < points1.size(); ++j) {
-        cv::Mat p0(3, 1, CV_64FC1);
-        cv::Mat p1(3, 1, CV_64FC1);
-          
+        cv::Mat p0_euclidean(2, 1, CV_64FC1);
+        cv::Mat p1_homogeneus(3, 1, CV_64FC1);
+        cv::Mat p1_euclidean(2, 1, CV_64FC1);
+
+        p0_euclidean.at<double>(0,0) = points0[i].x;
+		    p0_euclidean.at<double>(1,0) = points0[i].y;
+        
         // Trasformo in coord omogenee
-        p0.at<double>(0,0) = points0[i].x;
-		    p0.at<double>(1,0) = points0[i].y;
-		    p0.at<double>(2,0) = 1;
+        p1_homogeneus.at<double>(0,0) = points1[i].x;
+		    p1_homogeneus.at<double>(1,0) = points1[i].y;
+		    p1_homogeneus.at<double>(2,0) = 1;
 
-        p1.at<double>(0,0) = points1[j].x;
-		    p1.at<double>(1,0) = points1[j].y;
-		    p1.at<double>(2,0) = 1;
+        cv::Mat Hp1_homogeneus = H*p1_homogeneus;
+        cv::Mat Hp1_euclidean(2, 1, CV_64FC1);
 
-        // std::cout << "p0: " << p1 << std::endl;
-        // std::cout << "p1: " << p1 << std::endl;
-        cv::Mat Hp1 = H*p1;
-        // std::cout << "H*p1: " << Hp1 << std::endl;
+        // Torno in coord euclidee
+        Hp1_euclidean.at<double>(0, 0) = Hp1_homogeneus.at<double>(0, 0) / Hp1_homogeneus.at<double>(2, 0);
+        Hp1_euclidean.at<double>(1, 0) = Hp1_homogeneus.at<double>(1, 0) / Hp1_homogeneus.at<double>(2, 0);
+        
+        // std::cout << ransac_iteration << ") p0, Hp1: " << p0_euclidean << "\n" << Hp1_euclidean << "\n";
 
         // Se |p0, Hp1| < epsilon ==> aumento numero di inliers
-        if(cv::norm(p0, Hp1) < epsilon) {
+        // std::cout << cv::norm(cv::Mat(p0_euclidean), cv::Mat(Hp1_euclidean)) << std::endl;
+        if(cv::norm(cv::Mat(p0_euclidean), cv::Mat(Hp1_euclidean)) < epsilon) {
+          // std::cout << "ok" << std::endl;
           currInliers0.push_back(points0[i]);
           currInliers1.push_back(points1[i]);
         }
-      }
     }
 
     // aggiornamento nuovi migliori inliers se necessario
@@ -459,6 +463,8 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
 		currInliers0.clear();
 		currInliers1.clear();
   } // fine for
+
+  std::cout << "BestInliers0: " << bestInliers0.size() << std::endl;
 
   // Ricalcolo H coi migliori inliers trovati da ransac
   H = cv::findHomography(bestInliers0, bestInliers1, 0);
@@ -604,7 +610,7 @@ int main(int argc, char **argv) {
     //
     // Piuttosto critiche, da adattare in base alla propria implementazione
     //
-    int N=50000;            //numero di iterazioni di RANSAC
+    int N=50000/10;            //numero di iterazioni di RANSAC
     float epsilon = 3;      //distanza per il calcolo degli inliers
 
 
