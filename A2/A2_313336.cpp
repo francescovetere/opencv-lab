@@ -276,7 +276,9 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
   cv::GaussianBlur(image, blurred_image, cv::Size(3, 3), 1.0, 1.0);
 
   // Effettuo la derivata vera e propria
-  sobel(blurred_image, Ix, Iy);
+  // sobel(blurred_image, Ix, Iy);
+  cv::Sobel(blurred_image, Ix, CV_32FC1, 1, 0);
+  cv::Sobel(blurred_image, Iy, CV_32FC1, 0, 1);
 
   // Calcolo le 3 sottomatrici che compongono la matrice M
   cv::Mat Ix2, Iy2, IxIy;
@@ -306,10 +308,12 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
 	for (int r = 1; r < response.rows - 1; r++)
 		for (int c = 1; c < response.cols - 1; c++)
 				if (response.at<float>(r,c) > harrisTh && isLocalMaximum(response, r, c))
-						keypoints0.push_back( cv::KeyPoint(float(c), float(r), 3.f) );
+						keypoints0.push_back(cv::KeyPoint(float(c), float(r), 3.f) );
 
   // Visualizzazione passaggi intermedi
   /*
+  display("Ix", Ix);
+  display("Iy", Iy);
   display("Ix2", Ix2);
   display("Iy2", Iy2);
   display("IxIy", IxIy);
@@ -378,8 +382,6 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
    *
    */
 
-  std::cout << points0.size() << " " << points1.size() << " " << matches.size() << std::endl;
-
   // Inizializza seme random
   srand(time(NULL));
 
@@ -393,31 +395,48 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
   std::vector<int> inliers(N, 0);
 
   for(int ransac_iteration = 0; ransac_iteration < N; ++ransac_iteration) {
-    // std::cout << ransac_iteration << std::endl;
+
     // Seleziono i 4 match casuali
     for(int i = 0; i < sample_size; ++i) {
-      // Scelgo l'indice random se e solo se non è gia' stato scelto! Altrimenti potrei selezionare gli stessi punti
-      // E questo porterebbe ad avere una omografia chiaramente sbagliata
-      int index;
-      do {index = rand() % points1.size();}
-      while(std::find(randoms.begin(), randoms.end(), index) != randoms.end());
-      
-      // In uscita dal while, sono sicuro di avere ottenuto un random diverso dai precedenti
-      // std::cout << index << std::endl;
-      randoms.push_back(index);
+      // Scelgo un indice random, col quale prelevo i punti dai 2 array di punti
+      // I punti però non vengono inseriti se risultano duplicati, altrimenti chiaramente l'omografia non andrebbe a buon fine
 
-      sample0.push_back(points0[index]);
-      sample1.push_back(points1[index]);
+      int index;
+      cv::Point2f val0, val1;
+
+      do {
+        index = rand() % points1.size();
+
+        // In uscita dal while, sono sicuro di avere ottenuto un random diverso dai precedenti
+        randoms.push_back(index);
+
+        val0 = points0[index];
+        val1 = points1[index];
+
+      }while(
+             std::find(sample0.begin(), sample0.end(), val0) != sample0.end() &&
+             std::find(sample1.begin(), sample1.end(), val1) != sample1.end()
+            );
+
+      sample0.push_back(val0);
+      sample1.push_back(val1);
     }
 
-    // for(int i = 0; i < sample0.size(); ++i) std::cout << sample0[i] << " ";
-    // std::cout << "\n";
-    // for(int i = 0; i < sample1.size(); ++i) std::cout << sample1[i] << " ";
-    // std::cout << std::endl;
+    // std::cout << "sample 0: [";
+    // for(int i = 0; i < sample0.size(); ++i) {
+    //   std::cout << sample0[i] << " ";
+    // }
+    // std::cout << "]" << std::endl;
+
+    // std::cout << "sample 1: [";
+    // for(int i = 0; i < sample1.size(); ++i) {
+    //   std::cout << sample1[i] << " ";
+    // }
+    // std::cout << "]" << std::endl;
 
     // Calcolo l'omografia coi samples scelti randomicamente
     H = cv::findHomography(sample1, sample0, 0);
-
+    
     // Controllo quanti inliers rispettano l'omografia
     for(int i = 0; i < points0.size(); ++i) {
         cv::Mat p0_euclidean(2, 1, CV_64FC1);
@@ -462,21 +481,20 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
 		sample1.clear();
 		currInliers0.clear();
 		currInliers1.clear();
-  } // fine for
-
-  std::cout << "BestInliers0: " << bestInliers0.size() << std::endl;
+  } // fine ciclo for ransac
 
   // Ricalcolo H coi migliori inliers trovati da ransac
-  H = cv::findHomography(bestInliers0, bestInliers1, 0);
-
-  std::cout << H << std::endl;
+  H = cv::findHomography(bestInliers1, bestInliers0, 0);
 
   // Riempimento di matches
-	for (int i = 0; i < bestInliers0.size(); i++)
-		for (int j = 0; j < points0.size(); j++)
-			if (bestInliers0[i] == points0[j] && bestInliers1[i] == points1[j])
+	for(int i = 0; i < bestInliers0.size(); i++)
+		for(int j = 0; j < points0.size(); j++)
+			if(bestInliers0[i] == points0[j] && bestInliers1[i] == points1[j])
 				matchesInlierBest.push_back(matches[j]);
+  // for(int i = 0; i < matches.size(); ++i)
+  //   matchesInlierBest.push_back(matches[]);
 }
+
 
 
 int main(int argc, char **argv) {
@@ -487,7 +505,7 @@ int main(int argc, char **argv) {
   }
 
   // images
-  cv::Mat input, cover, newcover;
+  cv::Mat input, cover, new_cover;
 
   // load image from file
   input = cv::imread(argv[1], CV_8UC1);
@@ -496,18 +514,28 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // load image from file
+  // load cover from file
   cover = cv::imread(argv[2], CV_8UC1);
   if(cover.empty()) {
-    std::cout << "Error loading book image " << argv[2] << std::endl;
+    std::cout << "Error loading cover image " << argv[2] << std::endl;
     return 1;
   }
+
+  // load new cover from file
+  new_cover = cv::imread(argv[3], CV_8UC1);
+  if(new_cover.empty()) {
+    std::cout << "Error loading newcover image " << argv[3] << std::endl;
+    return 1;
+  }
+
+  cv::namedWindow("new_cover", cv::WINDOW_AUTOSIZE);
+  cv::imshow("new_cover", new_cover);
 
   ////////////////////////////////////////////////////////
   /// HARRIS CORNER
   //
   float alpha = 0.04;
-  float harrisTh = 500000*120;    //da impostare in base alla propria implementazione!!!!!
+  float harrisTh = 500000*200;    //da impostare in base alla propria implementazione!!!!!
 
   std::vector<cv::KeyPoint> keypoints0, keypoints1;
 
@@ -517,22 +545,22 @@ int main(int argc, char **argv) {
   //
   // Da commentare e sostituire con la propria implementazione
   //
-  {
-    std::vector<cv::Point2f> corners;
-    int maxCorners = 0;
-    double qualityLevel = 0.01;
-    double minDistance = 10;
-    int blockSize = 3;
-    bool useHarrisDetector = true;
-    double k = 0.04;
+  // {
+  //   std::vector<cv::Point2f> corners;
+  //   int maxCorners = 0;
+  //   double qualityLevel = 0.01;
+  //   double minDistance = 10;
+  //   int blockSize = 3;
+  //   bool useHarrisDetector = true;
+  //   double k = 0.04;
 
-    cv::goodFeaturesToTrack( input,corners,maxCorners,qualityLevel,minDistance,cv::noArray(),blockSize,useHarrisDetector,k ); // estrae strong feature (k -> alpha)
-    std::transform(corners.begin(), corners.end(), std::back_inserter(keypoints0), [](const cv::Point2f & p){ return cv::KeyPoint(p.x,p.y,3.0);} ); // applica funzione a range vector e memorizza in altro range 3->size del keypoint
+  //   cv::goodFeaturesToTrack( input,corners,maxCorners,qualityLevel,minDistance,cv::noArray(),blockSize,useHarrisDetector,k ); // estrae strong feature (k -> alpha)
+  //   std::transform(corners.begin(), corners.end(), std::back_inserter(keypoints0), [](const cv::Point2f & p){ return cv::KeyPoint(p.x,p.y,3.0);} ); // applica funzione a range vector e memorizza in altro range 3->size del keypoint
 
-    corners.clear();
-    cv::goodFeaturesToTrack( cover, corners, maxCorners, qualityLevel, minDistance, cv::noArray(), blockSize, useHarrisDetector, k );
-    std::transform(corners.begin(), corners.end(), std::back_inserter(keypoints1), [](const cv::Point2f & p){ return cv::KeyPoint(p.x,p.y,3.0);} );
-  }
+  //   corners.clear();
+  //   cv::goodFeaturesToTrack( cover, corners, maxCorners, qualityLevel, minDistance, cv::noArray(), blockSize, useHarrisDetector, k );
+  //   std::transform(corners.begin(), corners.end(), std::back_inserter(keypoints1), [](const cv::Point2f & p){ return cv::KeyPoint(p.x,p.y,3.0);} );
+  // }
   //
   //
   //
@@ -540,8 +568,8 @@ int main(int argc, char **argv) {
   //
   //
   // (Aggiungo un parametro finale per stampare a video il nome dell'immagine nei risultati temporanei)
-  // myHarrisCornerDetector(input, keypoints0, alpha, harrisTh, "input");
-  // myHarrisCornerDetector(cover, keypoints1, alpha, harrisTh, "cover");
+  myHarrisCornerDetector(input, keypoints0, alpha, harrisTh, "input");
+  myHarrisCornerDetector(cover, keypoints1, alpha, harrisTh, "cover");
   //
   //
   //
@@ -610,7 +638,7 @@ int main(int argc, char **argv) {
     //
     // Piuttosto critiche, da adattare in base alla propria implementazione
     //
-    int N=50000/10;            //numero di iterazioni di RANSAC
+    int N=5000;            //numero di iterazioni di RANSAC
     float epsilon = 3;      //distanza per il calcolo degli inliers
 
 
@@ -722,24 +750,46 @@ int main(int argc, char **argv) {
   cv::drawMatches(input, keypoints0, cover, keypoints1, matchesInliersBest, outInliers);
 
 
-  // se abbiamo un match, disegniamo sull'immagine di input i contorni della cover
+  // Se abbiamo un match, disegniamo sull'immagine di input i contorni della cover
   if(have_match) {
     for(unsigned int i = 0;i<corners_cover.size();++i) {
       cv::line(input, cv::Point(corners_cover[i].x , corners_cover[i].y ), cv::Point(corners_cover[(i+1)%corners_cover.size()].x , corners_cover[(i+1)%corners_cover.size()].y ), cv::Scalar(255), 2, 8, 0);
     }
   }
 
-  // cv::namedWindow("Input", cv::WINDOW_AUTOSIZE); // Noi dobbiamo fare passettino in più nel passo 5: prendere la cover e inserirla qui: doppio ciclo in cui spalmo la cover qui, usando H
-  // cv::imshow("Input", input);
+  // Sostituzione della nuova cover sulla cover originale
+  std::cout << "new cover r c: " << new_cover.rows << " " << new_cover.cols << std::endl;
+  for(int r = 0; r < new_cover.rows; ++r) {
+    for(int c = 0; c < new_cover.cols; ++c) {
+      // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
+      cv::Mat curr_point(3, 1, CV_64FC1);
+      curr_point.at<double>(0, 0) = r;
+      curr_point.at<double>(1, 0) = c;
+      curr_point.at<double>(2, 0) = 1;
 
-  // cv::namedWindow("BookCover", cv::WINDOW_AUTOSIZE);
-  // cv::imshow("BookCover", cover);
+      cv::Mat transformed_point = H*curr_point;
 
-  // cv::namedWindow("inputKeypoints", cv::WINDOW_AUTOSIZE);
-  // cv::imshow("inputKeypoints", inputKeypoints);
+      int x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
+      int y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
+      
+      std::cout << "x y val: " << x << " " << y <<  " " << (int) new_cover.at<uint8_t>(r, c) << std::endl;
+      input.at<uint8_t>(x, y) = (int) new_cover.at<uint8_t>(r, c);
 
-  // cv::namedWindow("coverKeypoints", cv::WINDOW_AUTOSIZE);
-  // cv::imshow("coverKeypoints", coverKeypoints);
+      std::cout << (int) input.at<uint8_t>(x, y) << std::endl;
+    }
+  }
+
+  cv::namedWindow("Input", cv::WINDOW_AUTOSIZE);
+  cv::imshow("Input", input);
+
+  cv::namedWindow("BookCover", cv::WINDOW_AUTOSIZE);
+  cv::imshow("BookCover", cover);
+
+  cv::namedWindow("inputKeypoints", cv::WINDOW_AUTOSIZE);
+  cv::imshow("inputKeypoints", inputKeypoints);
+
+  cv::namedWindow("coverKeypoints", cv::WINDOW_AUTOSIZE);
+  cv::imshow("coverKeypoints", coverKeypoints);
 
   cv::namedWindow("Matches", cv::WINDOW_AUTOSIZE); // tutti i match, sia sensati che non
   cv::imshow("Matches", outMatches);
