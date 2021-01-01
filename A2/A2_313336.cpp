@@ -389,8 +389,8 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
   std::vector<cv::Point2f> sample0, sample1;
   std::vector<cv::Point2f> currInliers0, currInliers1, bestInliers0, bestInliers1;
 
-  // vector dei numeri randomici scelti per gli indici, utile per controllare di non scegliere lo stesso indice più volte!
-  std::vector<int> randoms;
+  // // vector dei numeri randomici scelti per gli indici, utile per controllare di non scegliere lo stesso indice più volte!
+  // std::vector<int> randoms;
 
   std::vector<int> inliers(N, 0);
 
@@ -407,14 +407,11 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
       do {
         index = rand() % points1.size();
 
-        // In uscita dal while, sono sicuro di avere ottenuto un random diverso dai precedenti
-        randoms.push_back(index);
-
         val0 = points0[index];
         val1 = points1[index];
 
       }while(
-             std::find(sample0.begin(), sample0.end(), val0) != sample0.end() &&
+             std::find(sample0.begin(), sample0.end(), val0) != sample0.end() ||
              std::find(sample1.begin(), sample1.end(), val1) != sample1.end()
             );
 
@@ -476,7 +473,6 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
 		}
 
 	  // Svuotamento vettori
-    randoms.clear();
 		sample0.clear();
 		sample1.clear();
 		currInliers0.clear();
@@ -495,7 +491,20 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
   //   matchesInlierBest.push_back(matches[]);
 }
 
+// Sovrappone l'immagine src sull'immagine dst (devono avere stessa dimensione e stesso tipo CV_8UC1, ovviamente)
+void overlap_images(cv::Mat src, cv::Mat dst) {
+  for(int r = 0; r < src.rows; r++) {
+		for(int c = 0; c < src.cols; c++) {
+      int val;
+			if(dst.at<u_int8_t>(r, c) != 0)
+				val = dst.at<u_int8_t>(r,c);
+			else
+				val = src.at<u_int8_t>(r, c);
 
+			dst.at<u_int8_t>(r, c) = val;
+		}
+  }
+}
 
 int main(int argc, char **argv) {
 
@@ -626,7 +635,7 @@ int main(int argc, char **argv) {
   cv::Mat H;                                  //omografia finale
   std::vector<cv::DMatch> matchesInliersBest; //match corrispondenti agli inliers trovati
   std::vector<cv::Point2f> corners_cover;     //coordinate dei vertici della cover sull'immagine di input
-  bool have_match=false;                      //verra' messo a true in caso ti match
+  // bool have_match=false;                      //verra' messo a true in caso ti match
 
   //
   // Verifichiamo di avere almeno 4 inlier per costruire l'omografia
@@ -681,7 +690,7 @@ int main(int argc, char **argv) {
     float match_kpoints_H_th = 0.1;
     if(matchesInliersBest.size() > matchesDraw.size()*match_kpoints_H_th) {
       std::cout<<"MATCH!"<<std::endl;
-      have_match = true;
+      // have_match = true;
 
 
       // Calcoliamo i bordi della cover nell'immagine di input, partendo dai corrispondenti nell'immagine target
@@ -749,35 +758,43 @@ int main(int argc, char **argv) {
   cv::drawMatches(input, keypoints0, cover, keypoints1, matchesDraw, outMatches);
   cv::drawMatches(input, keypoints0, cover, keypoints1, matchesInliersBest, outInliers);
 
+  // Sostituzione della nuova cover sulla cover originale
+  
+  // for(int r = 0; r < new_cover.rows; ++r) {
+  //   for(int c = 0; c < new_cover.cols; ++c) {
+  //     // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
+  //     cv::Mat curr_point(3, 1, CV_64FC1);
+  //     curr_point.at<double>(0, 0) = r;
+  //     curr_point.at<double>(1, 0) = c;
+  //     curr_point.at<double>(2, 0) = 1;
 
+  //     cv::Mat transformed_point = H*curr_point;
+
+  //     int x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
+  //     int y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
+
+  //     if(x >= 0 && x <= input.rows - 1 &&
+  //        y >= 0 && y <= input.cols - 1)
+  //       input.at<uint8_t>(x, y) = new_cover.at<uint8_t>(r, c);
+  //   }
+  // }
+
+  /*
   // Se abbiamo un match, disegniamo sull'immagine di input i contorni della cover
   if(have_match) {
     for(unsigned int i = 0;i<corners_cover.size();++i) {
       cv::line(input, cv::Point(corners_cover[i].x , corners_cover[i].y ), cv::Point(corners_cover[(i+1)%corners_cover.size()].x , corners_cover[(i+1)%corners_cover.size()].y ), cv::Scalar(255), 2, 8, 0);
     }
   }
+  */
 
-  // Sostituzione della nuova cover sulla cover originale
-  std::cout << "new cover r c: " << new_cover.rows << " " << new_cover.cols << std::endl;
-  for(int r = 0; r < new_cover.rows; ++r) {
-    for(int c = 0; c < new_cover.cols; ++c) {
-      // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
-      cv::Mat curr_point(3, 1, CV_64FC1);
-      curr_point.at<double>(0, 0) = r;
-      curr_point.at<double>(1, 0) = c;
-      curr_point.at<double>(2, 0) = 1;
+  cv::Mat warpedCover;
+	cv::warpPerspective(new_cover, warpedCover, H, input.size());
 
-      cv::Mat transformed_point = H*curr_point;
+	overlap_images(input, warpedCover);
 
-      int x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
-      int y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
-      
-      std::cout << "x y val: " << x << " " << y <<  " " << (int) new_cover.at<uint8_t>(r, c) << std::endl;
-      input.at<uint8_t>(x, y) = (int) new_cover.at<uint8_t>(r, c);
-
-      std::cout << (int) input.at<uint8_t>(x, y) << std::endl;
-    }
-  }
+	cv::namedWindow("Overlapped cover", cv::WINDOW_AUTOSIZE);
+	cv::imshow("Overlapped cover", warpedCover);
 
   cv::namedWindow("Input", cv::WINDOW_AUTOSIZE);
   cv::imshow("Input", input);
