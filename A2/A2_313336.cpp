@@ -225,18 +225,16 @@ void sobel(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) {
 	convFloat(image, kernel_sobel_y, derivative_y);
 }
 
-// Ricerca massimo locale 3x3
-bool isLocalMaximum(cv::Mat& image, int r, int c)
-{
-		float px = image.at<float>(r,c);
-		bool isMax = true;
+// Funzione che ritorna true <==> image[r, c] è un massimo locale rispetto ad una finestra 3x3
+bool is_local_maximum(const cv::Mat& image, int r, int c) {
+  float val = image.at<float>(r, c);
 
-		for (int i = -1; i <= 1; i++)
-			for (int j = -1; j <= 1; j++)
-				if (px < image.at<float>(r+i,c+j))
-					isMax = false;
+  for(int rr = -1; rr <= 1; ++rr)
+    for(int cc = -1; cc <= 1; ++cc)
+      if(image.at<float>(r+rr, c+cc) > val)
+        return false;
 
-		return isMax;
+  return true;
 }
 
 // Stampa immagini
@@ -257,28 +255,16 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
 
   cv::Mat Ix, Iy;
 
-  // Prima di effettuare la derivata, eseguo un blur con una gaussiana
+  // Prima di effettuare la derivata, eseguo un blur gaussiano
   cv::Mat blurred_image;
-
-  // ******* DA RIVEDERE ************
-  // cv::Mat kernel_gauss_horizontal, kernel_gauss_vertical;
-  
-  // // Genero i kernel gaussiani orizzontale e verticale
-  // gaussianKernel(1.0f, 2, kernel_gauss_horizontal);
-
-  // // Ottengo il blur gaussiano come composizione di kernel verticale e orizzontale
-  // cv::Mat tmp;
-  // conv(image, kernel_gauss_horizontal, tmp);
-  // cv::transpose(kernel_gauss_horizontal, kernel_gauss_vertical);
-  // conv(tmp, kernel_gauss_vertical, blurred_image);
-  // ********************************
-  
   cv::GaussianBlur(image, blurred_image, cv::Size(3, 3), 1.0, 1.0);
 
   // Effettuo la derivata vera e propria
-  // sobel(blurred_image, Ix, Iy);
-  cv::Sobel(blurred_image, Ix, CV_32FC1, 1, 0);
-  cv::Sobel(blurred_image, Iy, CV_32FC1, 0, 1);
+  sobel(blurred_image, Ix, Iy);
+
+  // Altrimenti, con la funzione built-in di OpenCV:
+  // cv::Sobel(blurred_image, Ix, CV_32FC1, 1, 0);
+  // cv::Sobel(blurred_image, Iy, CV_32FC1, 0, 1);
 
   // Calcolo le 3 sottomatrici che compongono la matrice M
   cv::Mat Ix2, Iy2, IxIy;
@@ -304,11 +290,12 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
   response.create(gIx2.rows, gIx2.cols, CV_32FC1);
 	response = gIx2.mul(gIy2) - gIxIy.mul(gIxIy) - alpha * (gIx2 + gIy2).mul(gIx2 + gIy2);
 
-	// NON-MAXIMUM SUPPRESSION
-	for (int r = 1; r < response.rows - 1; r++)
-		for (int c = 1; c < response.cols - 1; c++)
-				if (response.at<float>(r,c) > harrisTh && isLocalMaximum(response, r, c))
-						keypoints0.push_back(cv::KeyPoint(float(c), float(r), 3.f) );
+	// non-maximum suppression 
+  // (escludo chiaramente i bordi, su cui non potrei il controllo sul massimo locale)
+	for (int r = 1; r < response.rows - 1; ++r)
+		for (int c = 1; c < response.cols - 1; ++c)
+				if(response.at<float>(r,c) > harrisTh && is_local_maximum(response, r, c))
+					keypoints0.push_back(cv::KeyPoint((float)c, (float)r, -1.0f));
 
   // Visualizzazione passaggi intermedi
   /*
@@ -417,18 +404,18 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
 
   // vector contenenti i 4 match casuali presi da points0 e points1
   std::vector<cv::Point2f> sample0, sample1;
-  std::vector<cv::Point2f> currInliers0, currInliers1, bestInliers0, bestInliers1;
 
-  // // vector dei numeri randomici scelti per gli indici, utile per controllare di non scegliere lo stesso indice più volte!
-  // std::vector<int> randoms;
+  // vector contenenti gli inliers trovati in ogni iterazione ransac
+  std::vector<cv::Point2f> currInliers0, currInliers1;
 
-  std::vector<int> inliers(N, 0);
+  // vector contenenti i migliori inliers trovati
+  std::vector<cv::Point2f> bestInliers0, bestInliers1;
 
   for(int ransac_iteration = 0; ransac_iteration < N; ++ransac_iteration) {
 
     // Seleziono i 4 match casuali
     for(int i = 0; i < sample_size; ++i) {
-      // Scelgo un indice random, col quale prelevo i punti dai 2 array di punti
+      // Scelgo un indice random, col quale prelevo i punti dai 2 vector points0 e points1
       // I punti però non vengono inseriti se risultano duplicati, altrimenti chiaramente l'omografia non andrebbe a buon fine
 
       int index;
@@ -449,6 +436,7 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
       sample1.push_back(val1);
     }
 
+    // DEBUG
     // std::cout << "sample 0: [";
     // for(int i = 0; i < sample0.size(); ++i) {
     //   std::cout << sample0[i] << " ";
@@ -462,7 +450,6 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
     // std::cout << "]" << std::endl;
 
     // Calcolo l'omografia coi samples scelti randomicamente
-    // H = cv::findHomography(sample1, sample0, 0);
     myFindHomographySVD(sample1, sample0, H);
 
     // Controllo quanti inliers rispettano l'omografia
@@ -486,24 +473,23 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
         Hp1_euclidean.at<double>(0, 0) = Hp1_homogeneus.at<double>(0, 0) / Hp1_homogeneus.at<double>(2, 0);
         Hp1_euclidean.at<double>(1, 0) = Hp1_homogeneus.at<double>(1, 0) / Hp1_homogeneus.at<double>(2, 0);
         
+        // DEBUG
         // std::cout << ransac_iteration << ") p0, Hp1: " << p0_euclidean << "\n" << Hp1_euclidean << "\n";
 
-        // Se |p0, Hp1| < epsilon ==> aumento numero di inliers
-        // std::cout << cv::norm(cv::Mat(p0_euclidean), cv::Mat(Hp1_euclidean)) << std::endl;
+        // Se |p0, Hp1| < epsilon ==> p0 e p1 sono inliers
         if(cv::norm(cv::Mat(p0_euclidean), cv::Mat(Hp1_euclidean)) < epsilon) {
-          // std::cout << "ok" << std::endl;
           currInliers0.push_back(points0[i]);
           currInliers1.push_back(points1[i]);
         }
     }
 
-    // aggiornamento nuovi migliori inliers se necessario
-	  if (currInliers0.size() > bestInliers0.size()) {
+    // Aggiorno i vector dei migliori inliers, nel caso abbia ottenuto piu' inliers rispetto alle iterazioni precedenti
+	  if(currInliers0.size() > bestInliers0.size()) {
 			bestInliers0.clear(); bestInliers0 = currInliers0;
 			bestInliers1.clear(); bestInliers1 = currInliers1;
 		}
 
-	  // Svuotamento vettori
+	  // Ad ogni iterazione, azzero i vector
 		sample0.clear();
 		sample1.clear();
 		currInliers0.clear();
@@ -511,16 +497,13 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
   } // fine ciclo for ransac
 
   // Ricalcolo H coi migliori inliers trovati da ransac
-  // H = cv::findHomography(bestInliers1, bestInliers0, 0);
   myFindHomographySVD(bestInliers1, bestInliers0, H);
 
-  // Riempimento di matches
+  // Costruisco il vector matchesInlierBest, da restituire in output
 	for(unsigned int i = 0; i < bestInliers0.size(); i++)
 		for(unsigned int j = 0; j < points0.size(); j++)
 			if(bestInliers0[i] == points0[j] && bestInliers1[i] == points1[j])
 				matchesInlierBest.push_back(matches[j]);
-  // for(int i = 0; i < matches.size(); ++i)
-  //   matchesInlierBest.push_back(matches[]);
 }
 
 // Sovrappone l'immagine foreground sull'immagine background (devono avere stessa dimensione e stesso tipo CV_8UC1, ovviamente)
