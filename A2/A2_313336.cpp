@@ -7,7 +7,7 @@
  * ./A2_313336 ../images/input1.jpg ../images/book.jpg ../images/cover2.jpg
  *******************/
 
-//OpneCV
+//OpenCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -28,8 +28,13 @@
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Dense>
 
-/**
- * Zero padding
+/***************************************************************************************/
+/***************************************************************************************/
+/******************************** FUNZIONI DI UTILITA' *********************************/
+/***************************************************************************************/
+/***************************************************************************************/
+
+/* Zero padding
  * 
  * Aggiunge alla matrice input una cornice di zeri, di padding_rows righe e padding_rows colonne,
  * ed inserisce il risultato in una matrice output
@@ -96,7 +101,7 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output, int type, float 
 }
 
 /**
- * ES 3 - Convoluzione float
+ * Convoluzione float
  */
 void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
 	// inizialmente calcolo le dimensioni senza 
@@ -155,7 +160,7 @@ void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int st
 }
 
 /**
- * ES 4 - Convoluzione intera
+ * Convoluzione intera
  */
 void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
 	// Richiamo la convoluzione float, e successivamente riporto i valori in un range [0; 255] con un contrast stretching
@@ -167,38 +172,7 @@ void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride 
 }
 
 /**
- * ES 5 - Kernel di un blur gaussiano orizzontale
- */
-void gaussianKernel(float sigma, int radius, cv::Mat& kernel) {
-	// dimensionamento del kernel orizzontale
-	int kernel_rows = 1;
-	int kernel_cols = (radius*2) + 1;
-	
-	kernel.create(kernel_rows, kernel_cols, CV_32FC1);
-	
-	// dichiaro un vettore che conterrà i valori della funzione gaussiana ad ogni iterazione 
-	std::vector<float> kernel_values;
-
-	// riempimento del kernel, tramite la formula della gaussiana orizzontale
-	for(int c = 0; c < kernel_cols; ++c) {
-		float gaussian_c = exp(-1*pow(c-radius, 2) / (2*pow(sigma, 2))) / sqrt(2*M_PI*pow(sigma, 2));
-		kernel_values.push_back(gaussian_c);
-	}
-
-	// calcolo la somma dei valori trovati
-	float sum = std::accumulate(kernel_values.begin(), kernel_values.end(), 0.0f);
-
-	// normalizzo i valori trovati, dividendo ciascuno per sum
-	for(int c = 0; c < kernel_cols; ++c) kernel_values[c] /= sum;
-
-	// assegno ad ogni pixel del kernel il suo valore finale
-	for(int c = 0; c < kernel_cols; ++c) {
-		*((float *) &kernel.data[c*kernel.elemSize1()]) = kernel_values[c];
-	}
-}
-
-/**
- * ES 7 (modificato per ottenere solo le derivate) - Derivata con Sobel 3x3
+ * Derivata con Sobel 3x3
  */
 void sobel(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) {
 	// applico una convoluzione di image con Sobel orizzontale e Sobel verticale
@@ -225,7 +199,29 @@ void sobel(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) {
 	convFloat(image, kernel_sobel_y, derivative_y);
 }
 
-// Funzione che ritorna true <==> image[r, c] è un massimo locale rispetto ad una finestra 3x3
+/**
+ *  Sovrappone l'immagine foreground sull'immagine background 
+ *  (devono avere stessa dimensione e stesso tipo CV_8UC1, ovviamente)
+ */
+void overlap_images(cv::Mat foreground, cv::Mat background, cv::Mat& output) {
+  output.create(foreground.rows, foreground.cols, foreground.type());
+
+  for(int r = 0; r < foreground.rows; r++) {
+		for(int c = 0; c < foreground.cols; c++) {
+      int val;
+			if(background.at<u_int8_t>(r, c) != 0)
+				val = background.at<u_int8_t>(r,c);
+			else
+				val = foreground.at<u_int8_t>(r, c);
+
+			output.at<u_int8_t>(r, c) = val;
+		}
+  }
+}
+
+/**
+ * Funzione che ritorna true <==> image[r, c] è un massimo locale rispetto ad una finestra 3x3
+ */
 bool is_local_maximum(const cv::Mat& image, int r, int c) {
   float val = image.at<float>(r, c);
 
@@ -237,15 +233,25 @@ bool is_local_maximum(const cv::Mat& image, int r, int c) {
   return true;
 }
 
-// Stampa immagini
+
+/**
+ * Stampa delle immagini
+ */
 void display(std::string name, cv::Mat image) {
 	int type = image.type();
 
 	if(type == CV_32FC1)
     contrast_stretching(image.clone(), image, CV_8UC1, 255.0f);
-
+  
+  cv::namedWindow(name, cv::WINDOW_NORMAL);
 	cv::imshow(name, image);
 }
+
+/***************************************************************************************/
+/***************************************************************************************/
+/**************************** FUNZIONI DELL'ASSEGNAMENTO *******************************/
+/***************************************************************************************/
+/***************************************************************************************/
 
 // Aggiungo un parametro finale per le stampe dei risultati intermedi
 void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & keypoints0, float alpha, float harrisTh, std::string img_name) {
@@ -506,27 +512,18 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
 				matchesInlierBest.push_back(matches[j]);
 }
 
-// Sovrappone l'immagine foreground sull'immagine background (devono avere stessa dimensione e stesso tipo CV_8UC1, ovviamente)
-void overlap_images(cv::Mat foreground, cv::Mat background, cv::Mat& output) {
-  output.create(foreground.rows, foreground.cols, foreground.type());
 
-  for(int r = 0; r < foreground.rows; r++) {
-		for(int c = 0; c < foreground.cols; c++) {
-      int val;
-			if(background.at<u_int8_t>(r, c) != 0)
-				val = background.at<u_int8_t>(r,c);
-			else
-				val = foreground.at<u_int8_t>(r, c);
 
-			output.at<u_int8_t>(r, c) = val;
-		}
-  }
-}
+/***************************************************************************************/
+/***************************************************************************************/
+/**************************************** MAIN *****************************************/
+/***************************************************************************************/
+/***************************************************************************************/
 
 int main(int argc, char **argv) {
 
   if(argc < 4) {
-    std::cerr << "Usage prova <image_filename> <book_filename> <alternative_cover_filename>" << std::endl;
+    std::cerr << "Usage prova <image_filename> <book_filename> <new_cover_filename>" << std::endl;
     return 0;
   }
 
@@ -554,6 +551,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // Resize della nuova cover per assicurarsi che abbia le stesse dimensioni della cover originale
+  cv::resize(new_cover.clone(), new_cover, cover.size());
   ////////////////////////////////////////////////////////
   /// HARRIS CORNER
   //
@@ -773,7 +772,15 @@ int main(int argc, char **argv) {
   cv::drawMatches(input, keypoints0, cover, keypoints1, matchesInliersBest, outInliers);
 
   // Sostituzione della nuova cover sulla cover originale
-  
+
+  cv::Mat transformed_cover;
+	cv::warpPerspective(new_cover, transformed_cover, H, input.size());
+
+  cv::Mat overlapped_input;
+	overlap_images(input, transformed_cover, overlapped_input);
+
+  // Se abbiamo un match, disegniamo sull'immagine di input i contorni della cover
+    
   // for(int r = 0; r < new_cover.rows; ++r) {
   //   for(int c = 0; c < new_cover.cols; ++c) {
   //     // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
@@ -783,56 +790,31 @@ int main(int argc, char **argv) {
   //     curr_point.at<double>(2, 0) = 1;
 
   //     cv::Mat transformed_point = H*curr_point;
+      
+  //     double x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
+  //     double y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
 
-  //     int x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
-  //     int y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
-
-  //     if(x >= 0 && x <= input.rows - 1 &&
-  //        y >= 0 && y <= input.cols - 1)
+  //     if(x >= 0 && x <= input.rows - 1 && y >= 0 && y <= input.cols - 1) {
   //       input.at<uint8_t>(x, y) = new_cover.at<uint8_t>(r, c);
+  //     }
   //   }
   // }
 
-  cv::Mat transformed_cover;
-	cv::warpPerspective(new_cover, transformed_cover, H, input.size());
-
-  cv::Mat overlapped_input;
-	overlap_images(input, transformed_cover, overlapped_input);
-
-  // Se abbiamo un match, disegniamo sull'immagine di input i contorni della cover
   if(have_match) {
     for(unsigned int i = 0;i<corners_cover.size();++i) {
       cv::line(input, cv::Point(corners_cover[i].x , corners_cover[i].y ), cv::Point(corners_cover[(i+1)%corners_cover.size()].x , corners_cover[(i+1)%corners_cover.size()].y ), cv::Scalar(255), 2, 8, 0);
     }
   }
 
-  cv::namedWindow("Input", cv::WINDOW_AUTOSIZE);
-  cv::imshow("Input", input);
-
-  cv::namedWindow("BookCover", cv::WINDOW_AUTOSIZE);
-  cv::imshow("BookCover", cover);
-
-  cv::namedWindow("inputKeypoints", cv::WINDOW_AUTOSIZE);
-  cv::imshow("inputKeypoints", inputKeypoints);
-
-  cv::namedWindow("coverKeypoints", cv::WINDOW_AUTOSIZE);
-  cv::imshow("coverKeypoints", coverKeypoints);
-
-  cv::namedWindow("Matches", cv::WINDOW_AUTOSIZE); // tutti i match, sia sensati che non
-  cv::imshow("Matches", outMatches);
-
-  cv::namedWindow("Matches Inliers", cv::WINDOW_AUTOSIZE); // solo i match sensati
-  cv::imshow("Matches Inliers", outInliers);
-
-  cv::namedWindow("Overlapped input", cv::WINDOW_AUTOSIZE);
-	cv::imshow("Overlapped input", overlapped_input);
+  display("Input", input);
+  display("BookCover", cover);
+  display("InputKeypoints", inputKeypoints);
+  display("coverKeypoints", coverKeypoints);
+  display("Matches", outMatches);
+  display("MatchesInliers", outInliers);
+  display("NewInput", overlapped_input);
   
   cv::waitKey();
 
   return 0;
 }
-
-
-
-
-
