@@ -435,17 +435,13 @@ void sobel(const cv::Mat& image, cv::Mat& magnitude, cv::Mat& orientation) {
 
 
 /**
- * ES 8 - Magnitudo e orientazione di Sobel 3x3
- * 
- * Nota: Uso un template di funzione, in quanto ho necessità di due versioni:
- * - uint_8, per l'ES 8
- * - float, per l'ES 9
+ * ES 8
+ * Date due coordinate r e c non discrete, calcolo un valore corrispondente ad esse
+ * interpolando il valore reale dei 4 vicini discreti, moltiplicati con opportuni pesi
  */
 template <class T>
 float bilinear(const cv::Mat& image, float r, float c) {
-	// Date due coordinate r e c non discrete, calcolo un valore corrispondente ad esse
- 	// interpolando il valore reale dei 4 vicini discreti, moltiplicati con opportuni pesi
-	
+
 	// calcolo s e t, ossia le parti decimali di r e c
 	int r_int = floor(r);
 	int c_int = floor(c);
@@ -476,6 +472,7 @@ float bilinear(const cv::Mat& image, float r, float c) {
 
 	return final_value;
 }
+
 
 
 

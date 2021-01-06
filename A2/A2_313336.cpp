@@ -3,7 +3,7 @@
  * Matricola 313336
  * Assegnamento 2
  * 
- * Esempio di comando per l'esecuzione:
+ * Esempio di esecuzione:
  * ./A2_313336 ../images/input1.jpg ../images/book.jpg ../images/cover2.jpg
  *******************/
 
@@ -203,14 +203,14 @@ void sobel(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) {
  *  Sovrappone l'immagine foreground sull'immagine background 
  *  (devono avere stessa dimensione e stesso tipo CV_8UC1, ovviamente)
  */
-void overlap_images(cv::Mat foreground, cv::Mat background, cv::Mat& output) {
+void overlap_images(const cv::Mat& foreground, const cv::Mat& background, cv::Mat& output) {
   output.create(foreground.rows, foreground.cols, foreground.type());
 
   for(int r = 0; r < foreground.rows; r++) {
 		for(int c = 0; c < foreground.cols; c++) {
       int val;
 			if(background.at<u_int8_t>(r, c) != 0)
-				val = background.at<u_int8_t>(r,c);
+				val = background.at<u_int8_t>(r, c);
 			else
 				val = foreground.at<u_int8_t>(r, c);
 
@@ -220,7 +220,7 @@ void overlap_images(cv::Mat foreground, cv::Mat background, cv::Mat& output) {
 }
 
 /**
- * Funzione che ritorna true <==> image[r, c] è un massimo locale rispetto ad una finestra 3x3
+ * Funzione che ritorna true <==> image[r, c] è un massimo locale, rispetto ad una finestra 3x3
  */
 bool is_local_maximum(const cv::Mat& image, int r, int c) {
   float val = image.at<float>(r, c);
@@ -233,9 +233,8 @@ bool is_local_maximum(const cv::Mat& image, int r, int c) {
   return true;
 }
 
-
 /**
- * Stampa delle immagini
+ * Funzione per la stampa delle immagini
  */
 void display(std::string name, cv::Mat image) {
 	int type = image.type();
@@ -253,7 +252,6 @@ void display(std::string name, cv::Mat image) {
 /***************************************************************************************/
 /***************************************************************************************/
 
-// Aggiungo un parametro finale per le stampe dei risultati intermedi
 void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & keypoints0, float alpha, float harrisTh, std::string img_name) {
   ////////////////////////////////////////////////////////
   /// HARRIS CORNER
@@ -261,7 +259,7 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
 
   cv::Mat Ix, Iy;
 
-  // Prima di effettuare la derivata, eseguo un blur gaussiano
+  // Prima di effettuare la derivata, eseguo un blur gaussiano per migliorarne l'effetto
   cv::Mat blurred_image;
   cv::GaussianBlur(image, blurred_image, cv::Size(3, 3), 1.0, 1.0);
 
@@ -296,8 +294,8 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
   response.create(gIx2.rows, gIx2.cols, CV_32FC1);
 	response = gIx2.mul(gIy2) - gIxIy.mul(gIxIy) - alpha * (gIx2 + gIy2).mul(gIx2 + gIy2);
 
-	// non-maximum suppression 
-  // (escludo chiaramente i bordi, su cui non potrei il controllo sul massimo locale)
+	// Infine, eseguo una non-maximum suppression 
+  // (escludo chiaramente i bordi, su cui non potrei effettuare il controllo sul massimo locale)
 	for (int r = 1; r < response.rows - 1; ++r)
 		for (int c = 1; c < response.cols - 1; ++c)
 				if(response.at<float>(r,c) > harrisTh && is_local_maximum(response, r, c))
@@ -369,11 +367,11 @@ void myFindHomographySVD(const std::vector<cv::Point2f> & points1, const std::ve
   cv::SVD::compute(A, D, U, Vt, cv::SVD::Flags::FULL_UV);
 
   cv::transpose(Vt, V);
-  
+
   // L'ultima colonna di V contiene il vettore soluzione di 9 elementi, che assegno alla matrice H
-	for (int i = 0; i < H.rows; i++)
-	  for (int j = 0; j < H.cols; j++)
-		  H.at<double>(i,j) = V.at<double>(i*H.cols + j, V.cols-1);
+	for(int r = 0; r < H.rows; ++r)
+    for(int c = 0; c < H.cols; ++c)
+      H.at<double>(r, c) = V.at<double>(r*H.rows + c, V.cols - 1);
   
   // Normalizzo per ottenere H.at<double>(2, 2) = 1
   H /= H.at<double>(2,2);
@@ -405,7 +403,7 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
    *
    */
 
-  // Inizializza un seme random
+  // Inizializzo un seme per gli indici randomici
   srand(time(NULL));
 
   // vector contenenti i 4 match casuali presi da points0 e points1
@@ -414,7 +412,7 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
   // vector contenenti gli inliers trovati in ogni iterazione ransac
   std::vector<cv::Point2f> currInliers0, currInliers1;
 
-  // vector contenenti i migliori inliers trovati
+  // vector contenenti i migliori inliers trovati in uscita dal ciclo di ransac
   std::vector<cv::Point2f> bestInliers0, bestInliers1;
 
   for(int ransac_iteration = 0; ransac_iteration < N; ++ransac_iteration) {
@@ -442,19 +440,6 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
       sample1.push_back(val1);
     }
 
-    // DEBUG
-    // std::cout << "sample 0: [";
-    // for(int i = 0; i < sample0.size(); ++i) {
-    //   std::cout << sample0[i] << " ";
-    // }
-    // std::cout << "]" << std::endl;
-
-    // std::cout << "sample 1: [";
-    // for(int i = 0; i < sample1.size(); ++i) {
-    //   std::cout << sample1[i] << " ";
-    // }
-    // std::cout << "]" << std::endl;
-
     // Calcolo l'omografia coi samples scelti randomicamente
     myFindHomographySVD(sample1, sample0, H);
 
@@ -467,7 +452,7 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
         p0_euclidean.at<double>(0,0) = points0[i].x;
 		    p0_euclidean.at<double>(1,0) = points0[i].y;
         
-        // Trasformo in coord omogenee
+        // Trasformo in coordinate omogenee
         p1_homogeneus.at<double>(0,0) = points1[i].x;
 		    p1_homogeneus.at<double>(1,0) = points1[i].y;
 		    p1_homogeneus.at<double>(2,0) = 1;
@@ -475,7 +460,7 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
         cv::Mat Hp1_homogeneus = H*p1_homogeneus;
         cv::Mat Hp1_euclidean(2, 1, CV_64FC1);
 
-        // Torno in coord euclidee
+        // Torno in coordinate euclidee
         Hp1_euclidean.at<double>(0, 0) = Hp1_homogeneus.at<double>(0, 0) / Hp1_homogeneus.at<double>(2, 0);
         Hp1_euclidean.at<double>(1, 0) = Hp1_homogeneus.at<double>(1, 0) / Hp1_homogeneus.at<double>(2, 0);
         
@@ -489,7 +474,7 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
         }
     }
 
-    // Aggiorno i vector dei migliori inliers, nel caso abbia ottenuto piu' inliers rispetto alle iterazioni precedenti
+    // Aggiorno i vector dei migliori inliers, nel caso in cui abbia ottenuto piu' inliers rispetto alle iterazioni precedenti
 	  if(currInliers0.size() > bestInliers0.size()) {
 			bestInliers0.clear(); bestInliers0 = currInliers0;
 			bestInliers1.clear(); bestInliers1 = currInliers1;
@@ -506,8 +491,8 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
   myFindHomographySVD(bestInliers1, bestInliers0, H);
 
   // Costruisco il vector matchesInlierBest, da restituire in output
-	for(unsigned int i = 0; i < bestInliers0.size(); i++)
-		for(unsigned int j = 0; j < points0.size(); j++)
+	for(unsigned int i = 0; i < bestInliers0.size(); ++i)
+		for(unsigned int j = 0; j < points0.size(); ++j)
 			if(bestInliers0[i] == points0[j] && bestInliers1[i] == points1[j])
 				matchesInlierBest.push_back(matches[j]);
 }
@@ -553,6 +538,7 @@ int main(int argc, char **argv) {
 
   // Resize della nuova cover per assicurarsi che abbia le stesse dimensioni della cover originale
   cv::resize(new_cover.clone(), new_cover, cover.size());
+
   ////////////////////////////////////////////////////////
   /// HARRIS CORNER
   //
@@ -660,7 +646,7 @@ int main(int argc, char **argv) {
     //
     // Piuttosto critiche, da adattare in base alla propria implementazione
     //
-    int N=5000;            //numero di iterazioni di RANSAC
+    int N=5000;             //numero di iterazioni di RANSAC
     float epsilon = 3;      //distanza per il calcolo degli inliers
 
 
@@ -772,21 +758,20 @@ int main(int argc, char **argv) {
   cv::drawMatches(input, keypoints0, cover, keypoints1, matchesInliersBest, outInliers);
 
   // Sostituzione della nuova cover sulla cover originale
-
   cv::Mat transformed_cover;
 	cv::warpPerspective(new_cover, transformed_cover, H, input.size());
 
   cv::Mat overlapped_input;
 	overlap_images(input, transformed_cover, overlapped_input);
 
-  // Se abbiamo un match, disegniamo sull'immagine di input i contorni della cover
-    
+  // Altrimenti, facendo la trasformazione di ogni punto manualmente:
+
   // for(int r = 0; r < new_cover.rows; ++r) {
   //   for(int c = 0; c < new_cover.cols; ++c) {
   //     // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
   //     cv::Mat curr_point(3, 1, CV_64FC1);
-  //     curr_point.at<double>(0, 0) = r;
-  //     curr_point.at<double>(1, 0) = c;
+  //     curr_point.at<double>(0, 0) = c;
+  //     curr_point.at<double>(1, 0) = r;
   //     curr_point.at<double>(2, 0) = 1;
 
   //     cv::Mat transformed_point = H*curr_point;
@@ -794,12 +779,13 @@ int main(int argc, char **argv) {
   //     double x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
   //     double y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
 
-  //     if(x >= 0 && x <= input.rows - 1 && y >= 0 && y <= input.cols - 1) {
-  //       input.at<uint8_t>(x, y) = new_cover.at<uint8_t>(r, c);
+  //     if(x >= 0 && x <= input.cols - 1 && y >= 0 && y <= input.rows - 1) {
+  //       input.at<uint8_t>(y, x) = new_cover.at<uint8_t>(r, c);
   //     }
   //   }
   // }
 
+  // Se abbiamo un match, disegniamo sull'immagine di input i contorni della cover
   if(have_match) {
     for(unsigned int i = 0;i<corners_cover.size();++i) {
       cv::line(input, cv::Point(corners_cover[i].x , corners_cover[i].y ), cv::Point(corners_cover[(i+1)%corners_cover.size()].x , corners_cover[(i+1)%corners_cover.size()].y ), cv::Scalar(255), 2, 8, 0);
