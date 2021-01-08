@@ -33,10 +33,6 @@ iterator
 -
 cstdlib
 -
-eigen3/Eigen/Core
--
-eigen3/Eigen/Dense
--
 
 /usr/local/include/opencv4/opencv2/calib3d.hpp
 opencv2/core.hpp
