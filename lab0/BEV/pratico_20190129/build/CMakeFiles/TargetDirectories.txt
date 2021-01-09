@@ -1,7 +1,0 @@
-/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/pratico_20190129/pratico_20190129/build/CMakeFiles/install/strip.dir
-/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/pratico_20190129/pratico_20190129/build/CMakeFiles/edit_cache.dir
-/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/pratico_20190129/pratico_20190129/build/CMakeFiles/pratico.dir
-/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/pratico_20190129/pratico_20190129/build/CMakeFiles/install.dir
-/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/pratico_20190129/pratico_20190129/build/CMakeFiles/rebuild_cache.dir
-/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/pratico_20190129/pratico_20190129/build/CMakeFiles/list_install_components.dir
-/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/pratico_20190129/pratico_20190129/build/CMakeFiles/install/local.dir

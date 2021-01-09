@@ -1,7 +1,0 @@
-/home/francesco/Documents/zzz-old-va-zzz/Filomeno/Materiale_visione_artificiale/Esami + Soluzioni/pratico_stereo_matching/pratico_20181220_solved/build/CMakeFiles/install/local.dir
-/home/francesco/Documents/zzz-old-va-zzz/Filomeno/Materiale_visione_artificiale/Esami + Soluzioni/pratico_stereo_matching/pratico_20181220_solved/build/CMakeFiles/install.dir
-/home/francesco/Documents/zzz-old-va-zzz/Filomeno/Materiale_visione_artificiale/Esami + Soluzioni/pratico_stereo_matching/pratico_20181220_solved/build/CMakeFiles/list_install_components.dir
-/home/francesco/Documents/zzz-old-va-zzz/Filomeno/Materiale_visione_artificiale/Esami + Soluzioni/pratico_stereo_matching/pratico_20181220_solved/build/CMakeFiles/rebuild_cache.dir
-/home/francesco/Documents/zzz-old-va-zzz/Filomeno/Materiale_visione_artificiale/Esami + Soluzioni/pratico_stereo_matching/pratico_20181220_solved/build/CMakeFiles/edit_cache.dir
-/home/francesco/Documents/zzz-old-va-zzz/Filomeno/Materiale_visione_artificiale/Esami + Soluzioni/pratico_stereo_matching/pratico_20181220_solved/build/CMakeFiles/install/strip.dir
-/home/francesco/Documents/zzz-old-va-zzz/Filomeno/Materiale_visione_artificiale/Esami + Soluzioni/pratico_stereo_matching/pratico_20181220_solved/build/CMakeFiles/simple.dir

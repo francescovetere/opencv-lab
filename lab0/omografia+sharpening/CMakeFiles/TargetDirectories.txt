@@ -1,7 +1,0 @@
-/home/francesco/Desktop/VA/old-va/Carlini-VA(27, Cattani)/Pratica/pratico_20191219/CMakeFiles/install/strip.dir
-/home/francesco/Desktop/VA/old-va/Carlini-VA(27, Cattani)/Pratica/pratico_20191219/CMakeFiles/install/local.dir
-/home/francesco/Desktop/VA/old-va/Carlini-VA(27, Cattani)/Pratica/pratico_20191219/CMakeFiles/install.dir
-/home/francesco/Desktop/VA/old-va/Carlini-VA(27, Cattani)/Pratica/pratico_20191219/CMakeFiles/list_install_components.dir
-/home/francesco/Desktop/VA/old-va/Carlini-VA(27, Cattani)/Pratica/pratico_20191219/CMakeFiles/rebuild_cache.dir
-/home/francesco/Desktop/VA/old-va/Carlini-VA(27, Cattani)/Pratica/pratico_20191219/CMakeFiles/edit_cache.dir
-/home/francesco/Desktop/VA/old-va/Carlini-VA(27, Cattani)/Pratica/pratico_20191219/CMakeFiles/pratico.dir
