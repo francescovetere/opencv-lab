@@ -84,11 +84,19 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output, int type, float 
 	for(int r = 0; r < input.rows; ++r) {
 		for(int c = 0; c < input.cols; ++c) {
 			for(int k = 0; k < input.channels(); ++k) {
-				float pixel_input = *((float*) &(input.data[((r*input.cols + c)*input.channels() + k)*input.elemSize1()]));
+				float pixel_input;
 				
+				// distinguo il modo in cui accedo alla matrice di input in base al tipo
+				if(type == CV_8UC1)
+					pixel_input = input.data[((r*input.cols + c)*input.channels() + k)*input.elemSize1()];
+				else if(type == CV_32FC1)
+					// nel caso di matrice float, devo castare correttamente il puntatore
+					// per farlo, prendo l'indirizzo di memoria e lo casto in modo opportuno, dopodichè lo dereferenzio
+					pixel_input = *((float*) &(input.data[((r*input.cols + c)*input.channels() + k)*input.elemSize1()]));
+
 				float stretched_pixel_input = a*pixel_input + b;
 				
-				// distinguo il modo in cui accedo alla matrice di output in base al suo tipo
+				// distinguo il modo in cui accedo alla matrice di output in base al tipo
 				if(type == CV_8UC1)
 					output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()] = (uchar) stretched_pixel_input;
 				
