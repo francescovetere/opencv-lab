@@ -96,14 +96,14 @@ int main(int argc, char **argv)
 		/* Accesso riga/colonna per immagine a multi-canale di 1 byte ciascuno 
 		   (metodo generale)
 		*/
-		for(int v = 0; v < output_img.rows; ++v)
+		for(int r = 0; r < output_img.rows; ++r)
 		{	
-			for(int u = 0;u < output_img.cols; ++u)
+			for(int c = 0;c < output_img.cols; ++c)
 			{
 				for(int k = 0;k < output_img.channels(); ++k) 
 				{	//per ogni pixel dell'immagine di output, copio il pixel corrispondente nell'immagine di input, con righe e colonne moltiplicate per 2
-					output_img.data[((v*output_img.cols + u)*output_img.channels() + k)*output_img.elemSize1()];  
-					= input_img.data[((v*input_img.cols*DOWNSAMPLE_FACT + u*DOWNSAMPLE_FACT)*input_img.channels() + k)*input_img.elemSize1()];
+					output_img.data[((r*output_img.cols + c)*output_img.channels() + k)*output_img.elemSize1()]  
+					= input_img.data[((r*input_img.cols*DOWNSAMPLE_FACT + c*DOWNSAMPLE_FACT)*input_img.channels() + k)*input_img.elemSize1()];
 				}
 			}
 		}

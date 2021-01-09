@@ -53,7 +53,10 @@
         "streambuf": "cpp",
         "thread": "cpp",
         "typeinfo": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "list": "cpp",
+        "map": "cpp",
+        "variant": "cpp"
     },
     "cmake.configureOnOpen": true
 }
