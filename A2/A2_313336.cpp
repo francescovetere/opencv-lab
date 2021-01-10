@@ -20,13 +20,10 @@
 #include <string>
 #include <vector>
 #include <algorithm> /* find */
+#include <numeric>
 #include <random>
 #include <iterator>
 #include <cstdlib>   /* srand, rand */
-
-// eigen
-// #include <eigen3/Eigen/Core>
-// #include <eigen3/Eigen/Dense>
 
 /***************************************************************************************/
 /***************************************************************************************/
@@ -40,7 +37,6 @@
  * Aggiunge alla matrice input una cornice di zeri, di padding_rows righe e padding_rows colonne,
  * ed inserisce il risultato in una matrice output
  */
-
 void zero_padding(const cv::Mat& input, int padding_rows, int padding_cols, cv::Mat& output) {
 	output = cv::Mat::zeros(input.rows + 2*padding_rows, input.cols + 2*padding_cols, input.type());
 
@@ -209,19 +205,22 @@ void sobel(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) {
 }
 
 /**
- *  Sovrappone l'immagine foreground sull'immagine background 
+ *  Sovrappone l'immagine foreground sull'immagine background
+ *  L'immagine foreground è supposta essere ovunque 0 tranne nei pixel effettivamente rilevanti  
  *  (devono avere stessa dimensione e stesso tipo CV_8UC1, ovviamente)
  */
 void overlap_images(const cv::Mat& foreground, const cv::Mat& background, cv::Mat& output) {
   output.create(foreground.rows, foreground.cols, foreground.type());
 
-  for(int r = 0; r < foreground.rows; r++) {
-		for(int c = 0; c < foreground.cols; c++) {
+  for(int r = 0; r < foreground.rows; ++r) {
+		for(int c = 0; c < foreground.cols; ++c) {
       int val;
-			if(background.at<u_int8_t>(r, c) != 0)
-				val = background.at<u_int8_t>(r, c);
-			else
+      // Se il foreground ha un valore != 0, considero il suo valore
+			if(foreground.at<u_int8_t>(r, c) != 0)
 				val = foreground.at<u_int8_t>(r, c);
+      // Altrimenti, considero il valore del background
+			else
+				val = background.at<u_int8_t>(r, c);
 
 			output.at<u_int8_t>(r, c) = val;
 		}
@@ -229,13 +228,13 @@ void overlap_images(const cv::Mat& foreground, const cv::Mat& background, cv::Ma
 }
 
 /**
- * Funzione che ritorna true <==> image[r, c] è un massimo locale, rispetto ad una finestra 3x3
+ * Funzione che ritorna true <==> image[r, c] è un massimo locale, rispetto ad una finestra w_size x w_size
  */
-bool is_local_maximum(const cv::Mat& image, int r, int c) {
+bool is_local_maximum(const cv::Mat& image, int r, int c, int w_size) {
   float val = image.at<float>(r, c);
 
-  for(int rr = -1; rr <= 1; ++rr)
-    for(int cc = -1; cc <= 1; ++cc)
+  for(int rr = -(w_size/2); rr <= (w_size/2); ++rr)
+    for(int cc = -(w_size/2); cc <= (w_size/2); ++cc)
       if(image.at<float>(r+rr, c+cc) > val)
         return false;
 
@@ -254,6 +253,8 @@ void display(std::string name, cv::Mat image) {
   cv::namedWindow(name, cv::WINDOW_NORMAL);
 	cv::imshow(name, image);
 }
+
+
 
 /***************************************************************************************/
 /***************************************************************************************/
@@ -304,7 +305,7 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
   // (escludo chiaramente i bordi, su cui non potrei effettuare il controllo sul massimo locale)
 	for (int r = 1; r < response.rows - 1; ++r)
 		for (int c = 1; c < response.cols - 1; ++c)
-				if(response.at<float>(r,c) > harrisTh && is_local_maximum(response, r, c))
+				if(response.at<float>(r,c) > harrisTh && is_local_maximum(response, r, c, 3))
 					keypoints0.push_back(cv::KeyPoint((float)c, (float)r, 1.0f));
 
   // Visualizzazione passaggi intermedi
@@ -402,7 +403,6 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
 
         val0 = points0[index];
         val1 = points1[index];
-
       }while(
              std::find(sample0.begin(), sample0.end(), val0) != sample0.end() ||
              std::find(sample1.begin(), sample1.end(), val1) != sample1.end()
@@ -553,10 +553,6 @@ int main(int argc, char **argv) {
   // (Aggiungo un parametro finale per stampare a video il nome dell'immagine nei risultati temporanei)
   myHarrisCornerDetector(input, keypoints0, alpha, harrisTh, "input");
   myHarrisCornerDetector(cover, keypoints1, alpha, harrisTh, "cover");
-  //
-  //
-  //
-
 
   std::cout << "keypoints0 " << keypoints0.size() << std::endl;
   std::cout << "keypoints1 " << keypoints1.size() << std::endl;
@@ -740,28 +736,33 @@ int main(int argc, char **argv) {
 
   // Sovrappongo la nuova cover trasformata sull'immagine di input originale
   cv::Mat overlapped_input;
-	overlap_images(input, transformed_cover, overlapped_input);
+	overlap_images(transformed_cover, input, overlapped_input);
 
-  /*** In alternativa, si puo' effettuare la trasformazione di ogni punto manualmente ***/
-  /*** Il risultato è però un po' peggiore, in quanto cv::warpPerspective() effettua un'interpolazione ottimale ***/
-  // for(int r = 0; r < new_cover.rows; ++r) {
-  //   for(int c = 0; c < new_cover.cols; ++c) {
-      // // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
-      // cv::Mat curr_point(3, 1, CV_64FC1);
-      // curr_point.at<double>(0, 0) = c;
-      // curr_point.at<double>(1, 0) = r;
-      // curr_point.at<double>(2, 0) = 1;
+  /**
+   *  In alternativa, si puo' effettuare la trasformazione di ogni punto manualmente, nel seguente modo 
+   *  (Il risultato è però un po' peggiore, in quanto cv::warpPerspective() effettua un'interpolazione ottimale)
+   */
 
-      // cv::Mat transformed_point = H*curr_point;
+  /*
+  for(int r = 0; r < new_cover.rows; ++r) {
+    for(int c = 0; c < new_cover.cols; ++c) {
+      // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
+      cv::Mat curr_point(3, 1, CV_64FC1);
+      curr_point.at<double>(0, 0) = c;
+      curr_point.at<double>(1, 0) = r;
+      curr_point.at<double>(2, 0) = 1;
+
+      cv::Mat transformed_point = H*curr_point;
       
-      // double x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
-      // double y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
+      double x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
+      double y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
 
-      // if(x >= 0 && x <= input.cols - 1 && y >= 0 && y <= input.rows - 1) {
-      //   input.at<uint8_t>(y, x) = new_cover.at<uint8_t>(r, c);
-      // }
-  //   }
-  // }
+      if(x >= 0 && x <= input.cols - 1 && y >= 0 && y <= input.rows - 1) {
+        input.at<uint8_t>(y, x) = new_cover.at<uint8_t>(r, c);
+      }
+    }
+  }
+  */
 
   // Se abbiamo un match, disegniamo sull'immagine di input i contorni della cover
   if(have_match) {
