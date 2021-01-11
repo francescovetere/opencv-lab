@@ -134,6 +134,15 @@ bool is_local_maximum(const cv::Mat& image, int r, int c, int w_size) {
   return true;
 }
 
+
+/** 
+ * Funzione che trova i massimi locali e li mette in un vector
+ */
+void find_local_maxs(const cv::Mat& image, std::vector<float>& maxs, int w_size) {
+	
+}
+
+
 /**
  * Funzione per la stampa delle immagini
  */
