@@ -20,14 +20,14 @@
  * - CV_8UC1 => la matrice in output, oltre a subire uno stretching dei valori, subisce anche una conversione di tipo (utile prima di una imshow)
  * 
  */
-void contrast_stretching(const cv::Mat& input, cv::Mat& output, int type, float MAX_RANGE = 255.0f) {
+void contrast_stretching(const cv::Mat& input, cv::Mat& output, int output_type, float MAX_RANGE = 255.0f) {
 	double min_pixel, max_pixel;
 
 	// funzione di OpenCV per la ricerca di minimo e massimo
 	cv::minMaxLoc(input, &min_pixel, &max_pixel);
 	
 	// DEBUG
-	// std::cout << "min: " << min_pixel << ", max: " << max_pixel << std::endl;
+	std::cout << "min: " << min_pixel << ", max: " << max_pixel << std::endl;
 
 	// In generale, contrast_and_gain(r, c) = a*f(r, c) + b
 	// contrast_stretching ne è un caso particolare in cui:
@@ -36,17 +36,18 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output, int type, float 
 	float a = (float) (MAX_RANGE / (max_pixel - min_pixel));
 	float b = (float) (-1 * ((MAX_RANGE * min_pixel) / (max_pixel - min_pixel)));
 	
-	output.create(input.rows, input.cols, type);
+	output.create(input.rows, input.cols, output_type);
 
 	for(int r = 0; r < input.rows; ++r) {
 		for(int c = 0; c < input.cols; ++c) {
 			for(int k = 0; k < input.channels(); ++k) {
 				float pixel_input;
 				
-				// distinguo il modo in cui accedo alla matrice di input in base al tipo
-				if(type == CV_8UC1)
+				// distinguo il modo in cui accedo alla matrice di input in base al suo tipo
+                int input_type = input.type();
+				if(input_type == CV_8UC1)
 					pixel_input = input.data[((r*input.cols + c)*input.channels() + k)*input.elemSize1()];
-				else if(type == CV_32FC1)
+				else if(input_type == CV_32FC1)
 					// nel caso di matrice float, devo castare correttamente il puntatore
 					// per farlo, prendo l'indirizzo di memoria e lo casto in modo opportuno, dopodichè lo dereferenzio
 					pixel_input = *((float*) &(input.data[((r*input.cols + c)*input.channels() + k)*input.elemSize1()]));
@@ -54,10 +55,10 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output, int type, float 
 				float stretched_pixel_input = a*pixel_input + b;
 				
 				// distinguo il modo in cui accedo alla matrice di output in base al tipo
-				if(type == CV_8UC1)
+				if(output_type == CV_8UC1)
 					output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()] = (uchar) stretched_pixel_input;
 				
-				else if(type == CV_32FC1)
+				else if(output_type == CV_32FC1)
 					// nel caso di matrice float, devo castare correttamente il puntatore
 					// per farlo, prendo l'indirizzo di memoria e lo casto in modo opportuno, dopodichè lo dereferenzio
 					*((float*)(&output.data[((r*output.cols + c)*output.channels() + k)*output.elemSize1()])) = stretched_pixel_input;
@@ -72,7 +73,6 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output, int type, float 
  * Aggiunge alla matrice input una cornice di zeri, di padding_rows righe e padding_rows colonne,
  * ed inserisce il risultato in una matrice output
  */
-
 void zero_padding(const cv::Mat& input, int padding_rows, int padding_cols, cv::Mat& output) {
 	output = cv::Mat::zeros(input.rows + 2*padding_rows, input.cols + 2*padding_cols, input.type());
 
@@ -85,6 +85,178 @@ void zero_padding(const cv::Mat& input, int padding_rows, int padding_cols, cv::
 		}
 	}
 }
+
+/** Funzione per il calcolo dell'istogramma 
+ */
+int* compute_histogram(const cv::Mat& img, int max_levels) {
+	int* histogram = new int[max_levels];
+
+	// inzializzo vettore a 0
+	for(int i = 0; i < max_levels; ++i)
+		histogram[i] = 0;
+
+	// ogni pixel contribuisce col suo valore ad aumentare di 1 la corrispondente colonna dell'istogramma
+	for(int v = 0; v < img.rows; ++v)
+		for(int u = 0; u < img.cols; ++u)
+			++histogram[img.data[(v*img.cols + u)]];
+
+	// ritorno il puntatore all'area di memoria allocata con la new
+	return histogram;
+}
+
+
+
+/**
+ * Binarizzo un'immagine di input data una certa soglia
+ */
+void binarize(const cv::Mat& input_img, int threshold, cv::Mat& output_img) {
+	int max_intensity = 255;
+	output_img.create(input_img.rows, input_img.cols, input_img.type());
+
+	for(int v = 0; v < output_img.rows; ++v) {	
+		for(int u = 0; u < output_img.cols; ++u) {
+				if((int)input_img.data[(v*input_img.cols + u)] >= threshold)
+					output_img.data[(v*output_img.cols + u)] = max_intensity;
+				else output_img.data[(v*output_img.cols + u)] = 0;
+			}
+		}
+}
+
+/**
+ * Funzione per il calcolo della varianza degli elementi un array
+ * (partendo da begin e terminando in end)
+ * varianza di n dati: sigma^2(n) = sum{i=1, n} (x_i - media_x)^2 / n
+ */
+double variance(int* arr, int begin, int end){
+	int n = (end - begin + 1);
+
+	double avg = 0; // media aritmetica
+
+	for(int i = begin; i < end; i++) {
+		avg += arr[i];
+	} 
+
+	avg = avg / n;
+
+	double sigma_quad = 0; // varianza (da restituire come risultato)
+	
+	for(int i = begin; i < end; i++) {
+		sigma_quad += pow(arr[i] - avg, 2);
+	} 
+
+	sigma_quad = sigma_quad / n;
+	
+	return sigma_quad;
+}
+
+/** Funzione per il calcolo dei due pesi w1 e w2, in funzione della soglia th
+ * w0(th) = sum{i=0, th-1} (histogram[i])
+ * w1(th) = sum{i=th, levels-1} (histogram[i])
+ */
+int weight(int* histogram, int begin, int end) {
+	int res = 0;
+
+	for(int i = begin; i < end; ++i) {
+		res += histogram[i];
+	}
+
+	return res;
+}
+
+/**
+ * Funzione che riceve in input un istogramma (assunto bimodale) ed il suo numero di livelli,
+ * e ritorna in output la soglia migliore tramite metodo di Otsu 
+ */
+int otsu_threshold(int* histogram, int levels) {
+	int best_treshold = 0;
+	
+	// tmp è la funzione di otsu data la soglia th attuale (inizialmente th = 1):
+	// voglio trovare il tmp minimo, e quindi la th migliore
+	double tmp = variance(histogram, 0, 1)*weight(histogram, 0, 1) +
+					variance(histogram, 1, levels)*weight(histogram, 1, levels);
+
+	double best_value = tmp;
+
+	// ho gia' calcolato tmp per th = 1, quindi parto da th = 2
+	for(int th = 2; th < levels; ++th) {
+		std::cout << "th: " << th << " ";
+
+		// tmp è la funzione di otsu data la soglia th attuale: voglio trovare il tmp minimo, e quindi la th migliore
+		tmp = variance(histogram, 0, th)*weight(histogram, 0, th) +
+					variance(histogram, th, levels)*weight(histogram, th, levels);
+		
+		std::cout << "variance: " << tmp << std::endl;
+
+		if(tmp < best_value) {
+			best_value = tmp;
+			best_treshold = th;
+		}
+		
+	}
+
+	return best_treshold;
+}
+
+// OR fra 1-pixel dell'immagine di input e corrispondenti pixel dell'elemento strutturale
+// N.B. cornice piu' esterna immagine di input esclusa
+void dilation(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	for(int v = 0; v < output.rows; ++v)
+	{
+		for(int u = 0; u < output.cols; ++u)
+		{
+			// se siamo su un 1-pixel dell'imm di input, procedo con l'effettuare l'OR sul vicinato
+			if(input.data[(v+1)*input.cols + (u+1)] == max_intensity) {
+				// esamino tutti i 9 pixel dell'elemento strutturale, e ne faccio l'OR coi corrispondenti pixel sull'immagine
+				for(int i = 0; i < structural_element.rows; ++i) {
+					for(int j = 0; j < structural_element.cols; ++j) {
+						if(input.data[(v+i)*input.cols + (u+j)] != 0 || structural_element.data[i*structural_element.cols + j] != 0)
+							output.data[(v+i)*output.cols + (u+i)] = max_intensity;
+						else output.data[(v+i)*output.cols + (u+i)] = 0;
+					}
+				}
+			}
+		}
+	}
+}
+
+// AND fra tutti i pixel dell'immagine di input e corrispondenti pixel dell'elemento strutturale
+// N.B. cornice piu' esterna immagine di input esclusa
+void erosion(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	bool ok;
+
+	for(int v = 0; v < output.rows; ++v)
+	{	
+		for(int u = 0; u < output.cols; ++u)
+		{
+			ok = true;
+			
+			// esamino tutti i 9 pixel dell'elemento strutturale, e ne faccio l'AND coi corrispondenti pixel sull'immagine
+			for(int i = 0; i < structural_element.rows; ++i) {
+				for(int j = 0; j < structural_element.cols; ++j) {
+					if(input.data[(v+i)*input.cols + (u+j)] == 0 || structural_element.data[i*structural_element.cols + j] == 0) {
+						ok = false;
+					}
+				}
+			}
+				
+			if(ok) output.data[(v*output.cols + u)] = max_intensity;
+			else output.data[(v*output.cols + u)] = 0;
+		}
+	}
+}
+
+void opening(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	cv::Mat tmp(input.rows-2, input.cols-2, input.type());
+	erosion(input, structural_element, tmp);
+	dilation(tmp, structural_element, output);
+}
+
+void closing(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	cv::Mat tmp(input.rows-2, input.cols-2, input.type());
+	dilation(input, structural_element, tmp);
+	erosion(tmp, structural_element, output);
+}
+
 
 /**
  *  Sovrappone l'immagine foreground sull'immagine background
@@ -108,7 +280,6 @@ void overlap_images(const cv::Mat& foreground, const cv::Mat& background, cv::Ma
 		}
   }
 }
-
 
 /** 
  * Funzione che effettua la trasposta
@@ -134,14 +305,19 @@ bool is_local_maximum(const cv::Mat& image, int r, int c, int w_size) {
   return true;
 }
 
-
 /** 
  * Funzione che trova i massimi locali e li mette in un vector
  */
 void find_local_maxs(const cv::Mat& image, std::vector<float>& maxs, int w_size) {
-	
+	// scorro lungo tutta l'immagine (escludendo i bordi)
+	for(int r = w_size/2; r < image.rows - w_size/2; ++r) {
+		for(int c = w_size/2; c < image.cols - w_size/2; ++c) {
+			// se il pixel è > di tutti i pixel della finestra, lo aggiungo al vector di output
+			if(is_local_maximum(image, r, c, w_size)) 
+				maxs.push_back(image.at<float>(r, c));	
+		}
+	}
 }
-
 
 /**
  * Funzione per la stampa delle immagini
@@ -155,8 +331,6 @@ void display(std::string name, cv::Mat image) {
   	cv::namedWindow(name, cv::WINDOW_NORMAL);
 	cv::imshow(name, image);
 }
-
-
 
 /**
  * Max Pooling
@@ -278,7 +452,6 @@ void averagePooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
 	}
 }
 
-
 /**
  * Convoluzione float
  */
@@ -382,13 +555,12 @@ void gaussianKernel(float sigma, int radius, cv::Mat& kernel) {
 }
 
 /**
- * Derivata con Sobel 3x3
+ * Derivata x con Sobel 3x3
  */
-void sobel_(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) {
-	// applico una convoluzione di image con Sobel orizzontale e Sobel verticale
-	// ottenendo quindi l'immagine di input derivata nelle due direzioni
+void sobel_x(const cv::Mat& image, cv::Mat& derivative_x) {
+	// applico una convoluzione di image con Sobel orizzontale
 
-	// creo i due filtri di Sobel
+	// creo il filtro di Sobel
 	int sobel_size = 3;
 
 	float sobel_x_data[] { 1,  2,  1,
@@ -396,16 +568,27 @@ void sobel_(const cv::Mat& image, cv::Mat& derivative_x, cv::Mat& derivative_y) 
 						  -1, -2, -1 };
 
 	cv::Mat kernel_sobel_x(sobel_size, sobel_size, CV_32FC1, sobel_x_data);
-
-	float sobel_y_data[] { 1, 0, -1,
-						   2, 0, -2,
-						   1, 0, -1 };
-
-	cv::Mat kernel_sobel_y(sobel_size, sobel_size, CV_32FC1, sobel_y_data);
-
   
 	// applico le convoluzioni
 	convFloat(image, kernel_sobel_x, derivative_x);
+}
+
+/**
+ * Derivata y con Sobel 3x3
+ */
+void sobel_y(const cv::Mat& image, cv::Mat& derivative_y) {
+	// applico una convoluzione di image con Sobel verticale
+
+	// creo il filtro di Sobel
+	int sobel_size = 3;
+
+	float sobel_y_data[] { 1,  0,  -1,
+						   2,  0,  -2,
+						   1,  0,  -1};
+
+	cv::Mat kernel_sobel_y(sobel_size, sobel_size, CV_32FC1, sobel_y_data);
+  
+	// applico le convoluzioni
 	convFloat(image, kernel_sobel_y, derivative_y);
 }
 
@@ -463,8 +646,6 @@ void sobel(const cv::Mat& image, cv::Mat& magnitude, cv::Mat& orientation) {
 		}
 	}
 }
-
-
 
 /**
  * Date due coordinate r e c non discrete, calcolo un valore corrispondente ad esse
@@ -556,11 +737,6 @@ void findPeaks(const cv::Mat& magnitude, const cv::Mat& orientation, cv::Mat& ou
 
 
 
-
-
-
-
-
 int main(int argc, char **argv) {
 	//////////////////////
 	//processing code here
@@ -569,11 +745,22 @@ int main(int argc, char **argv) {
 							 	    2, 0, -2,
 							 	    1, 0, -1 };
 
-	cv::Mat M1(3, 3, CV_32FC1, kernel_convfloat_data);
-	std::cout << "M1: " << M1 << std::endl;
-	transpose(M1.clone(), M1);
-	std::cout << "Transposed M1: " << M1 << std::endl;
+	float kernel_for_local_maxes[] { 1, 0, -1, 2, 5,
+							 	     2, 0, -2, 3, 4,
+							 	     1, 12, -1, 8, 1, 
+									 1, 7,  0, 2, 5,
+									 1, 2,  1, 2, 5,
+								   };
 
+	cv::Mat M1(5, 5, CV_32FC1, kernel_for_local_maxes);
+	std::cout << "M1: " << M1 << std::endl;
+	
+	std::vector<float> maxs;
+	find_local_maxs(M1, maxs, 3);
+
+	std::cout << "Local maxs: [";
+	for(int i = 0; i < maxs.size(); ++i) std::cout << maxs[i] << " ";
+	std::cout << "]\n";
 	/////////////////////
 
 	//display image

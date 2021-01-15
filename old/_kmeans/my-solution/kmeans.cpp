@@ -12,8 +12,7 @@
 /// Struttura per rappresentate un cluster
 /// Da eventualmente modificare a piacere
 ///
-typedef struct _cluster
-{
+typedef struct _cluster {
 	int num_pixels=0;    //number of pixel in cluster, inizialmente facoltativo
 
 	float ur = 0;       //center of mass R
@@ -28,8 +27,7 @@ typedef struct _cluster
 	// in questo caso li confrontiamo in base al numero di elementi
 	// un altro criterio possible potrebbe essere la posizione del baricentro dei pixel
 	//
-	bool operator<(const _cluster & a)
-	{
+	bool operator<(const _cluster & a) {
 		return num_pixels < a.num_pixels;
 	}
 
@@ -38,8 +36,7 @@ typedef struct _cluster
 
 
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 	//VOSTRO path in cui si trovano le immagini
 	std::string path("../images/");
 
@@ -67,14 +64,12 @@ int main(int argc, char **argv)
 	std::cout<<"Opening original image"<<path+original<<std::endl;
 
 	cv::Mat image = cv::imread(path+original, CV_32FC3);
-	if(image.empty())
-	{
+	if(image.empty()) {
 		std::cout<<"Unable to open "<<path+original<<std::endl;
 		return 1;
 	}
 
-	while(1)
-	{
+	while(1) {
 		//lista cluster dell'immagine originale
 		std::vector<cluster> cluster_list_original(cluster_count);
 		//immagine dei cluster
@@ -241,14 +236,14 @@ int main(int argc, char **argv)
 			std::sort(cluster_list_compare.begin(), cluster_list_compare.end());
 
 			//ad esempio...
-//			std::cout<<"error :"<<error<<std::endl;
-//			if(error<best_error)
-//			{
-//				best_error = error;
-//				best_name = s;
-//
-//				best_image_cluster = new_image_compare.clone();
-//			}
+			//			std::cout<<"error :"<<error<<std::endl;
+			//			if(error<best_error)
+			//			{
+			//				best_error = error;
+			//				best_name = s;
+			//
+			//				best_image_cluster = new_image_compare.clone();
+			//			}
 
 
 
@@ -261,8 +256,7 @@ int main(int argc, char **argv)
 			//  tutti-a-tutti tenendo la soluzione migliore per ogni immagine. Sarebbe stato troppo lungo per un esame di due ore.
 			//
 			float error=0.0f;
-			for(int i=0;i<cluster_count;++i)
-			{
+			for(int i=0; i < cluster_count; ++i) {
 				cv::Point3f center_original(cluster_list_original[i].ur, cluster_list_original[i].ug, cluster_list_original[i].ub);
 				cv::Point3f center_compare(cluster_list_compare[i].ur, cluster_list_compare[i].ug, cluster_list_compare[i].ub);
 

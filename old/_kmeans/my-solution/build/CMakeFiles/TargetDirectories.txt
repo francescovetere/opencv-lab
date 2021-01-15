@@ -1,0 +1,7 @@
+/home/francesco/Desktop/VA/lab/old/kmeans/build/CMakeFiles/install/strip.dir
+/home/francesco/Desktop/VA/lab/old/kmeans/build/CMakeFiles/install/local.dir
+/home/francesco/Desktop/VA/lab/old/kmeans/build/CMakeFiles/install.dir
+/home/francesco/Desktop/VA/lab/old/kmeans/build/CMakeFiles/list_install_components.dir
+/home/francesco/Desktop/VA/lab/old/kmeans/build/CMakeFiles/rebuild_cache.dir
+/home/francesco/Desktop/VA/lab/old/kmeans/build/CMakeFiles/edit_cache.dir
+/home/francesco/Desktop/VA/lab/old/kmeans/build/CMakeFiles/kmeans.dir
