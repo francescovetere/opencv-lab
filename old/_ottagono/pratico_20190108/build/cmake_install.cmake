@@ -1,4 +1,4 @@
-# Install script for directory: /mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/Simulazione_esame_20190108/pratico_20190108/pratico_20190108
+# Install script for directory: /home/francesco/Desktop/VA/lab/old/_ottagono/pratico_20190108
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -44,7 +44,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
          FILE "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/simple"
          RPATH "")
   endif()
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/Simulazione_esame_20190108/pratico_20190108/pratico_20190108/build/simple")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE EXECUTABLE FILES "/home/francesco/Desktop/VA/lab/old/_ottagono/pratico_20190108/build/simple")
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/simple" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/simple")
     file(RPATH_CHANGE
@@ -65,5 +65,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/mnt/c/Users/Mirko Marasco/Downloads/Materiale_visione_artificiale/Esami + Soluzioni/Simulazione_esame_20190108/pratico_20190108/pratico_20190108/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/francesco/Desktop/VA/lab/old/_ottagono/pratico_20190108/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

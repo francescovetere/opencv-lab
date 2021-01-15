@@ -27,7 +27,7 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output, int output_type,
 	cv::minMaxLoc(input, &min_pixel, &max_pixel);
 	
 	// DEBUG
-	std::cout << "min: " << min_pixel << ", max: " << max_pixel << std::endl;
+	// std::cout << "min: " << min_pixel << ", max: " << max_pixel << std::endl;
 
 	// In generale, contrast_and_gain(r, c) = a*f(r, c) + b
 	// contrast_stretching ne è un caso particolare in cui:
@@ -86,6 +86,78 @@ void zero_padding(const cv::Mat& input, int padding_rows, int padding_cols, cv::
 	}
 }
 
+/**
+ * Convoluzione float
+ */
+void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
+	// inizialmente calcolo le dimensioni senza 
+	int padding_rows = 0, padding_cols = 0;
+
+	// Calcolo le dimensioni di output dopo aver applicato il kernel (formula tratta dalle slide di teoria)
+	int out_tmp_rows = floor((image.rows + 2*padding_rows - kernel.rows)/stride + 1);
+	int out_tmp_cols = floor((image.cols + 2*padding_cols - kernel.cols)/stride + 1);
+
+	// uso la create() per definire l'immagine di output (poichè non inizializzata dal main)
+	out.create(out_tmp_rows, out_tmp_cols, CV_32FC1);
+
+	// padding per riottenere le dimensioni di input
+	padding_rows = floor((image.rows - out_tmp_rows)/2);
+	padding_cols = floor((image.cols - out_tmp_cols)/2);
+	zero_padding(out.clone(), padding_rows, padding_cols, out);
+	
+	// definisco un vettore che conterrà ad ogni iterazione la maschera di pixel attuale, pesata coi corrispondenti valori del kernel
+	// grazie a questo, calcolerò poi il risultato della convoluzione come somma di questi valori
+	std::vector<float> convolution_window;
+
+	for(int r = 0; r < image.rows; ++r) {
+		for(int c = 0; c < image.cols; ++c) {
+			// Effettuo i calcoli solamente se, tenuto conto di size e stride, non fuoriesco dall'immagine
+			if((r+kernel.rows)*stride <= image.rows && (c+kernel.cols)*stride <= image.cols) {
+				for(int k = 0; k < out.channels(); ++k) {
+
+					// 2 cicli per analizzare l'attuale kernel
+					for(int r_kernel = 0; r_kernel < kernel.rows; ++r_kernel) {
+						for(int c_kernel = 0; c_kernel < kernel.cols; ++c_kernel) {
+							// estraggo il pixel corrente sull'immagine
+							float image_pixel = image.data[((stride*(r+r_kernel)*image.cols + stride*(c+c_kernel))*image.channels() + k)*image.elemSize1()];
+								
+							// estraggo il pixel corrente sul kernel (ricondandomi di castare correttamente il puntatore restituito)
+							float kernel_pixel = *((float*) &kernel.data[((r_kernel*kernel.cols + c_kernel)*kernel.channels() + k)*kernel.elemSize1()]);
+								
+							// calcolo il valore corrente della convoluzione, e lo inserisco nel vector
+							float current_pixel = image_pixel*kernel_pixel;	
+
+							convolution_window.push_back(current_pixel);
+						}
+					}
+
+					// sommo i valori del vector, con la funzione accumulate
+					float sum_val = std::accumulate(convolution_window.begin(), convolution_window.end(), 0.0f);
+
+					// svuoto il vector per l'iterazione successiva
+					convolution_window.clear();
+
+					// accedo al pixel di output partendo dal pixel corrente nell'input, e sommando il padding necessario
+					*((float*) &out.data[(((r+padding_rows)*out.cols + (c+padding_cols))*out.channels() + k)*out.elemSize1()]) = sum_val;
+				}
+			}
+		}
+	}
+}
+
+/**
+ * Convoluzione intera
+ */
+void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
+	// Richiamo la convoluzione float, e successivamente riporto i valori in un range [0; 255] con un contrast stretching
+	// convertendo già a CV_8UC1 per ottenere un'immagine pronta da passare a imshow 
+	cv::Mat convfloat_out;
+	convFloat(image, kernel, convfloat_out, stride);
+
+	contrast_stretching(convfloat_out, out, CV_8UC1);
+}
+
+
 /** Funzione per il calcolo dell'istogramma 
  */
 int* compute_histogram(const cv::Mat& img, int max_levels) {
@@ -103,8 +175,6 @@ int* compute_histogram(const cv::Mat& img, int max_levels) {
 	// ritorno il puntatore all'area di memoria allocata con la new
 	return histogram;
 }
-
-
 
 /**
  * Binarizzo un'immagine di input data una certa soglia
@@ -453,77 +523,6 @@ void averagePooling(const cv::Mat& image, int size, int stride, cv::Mat& out) {
 }
 
 /**
- * Convoluzione float
- */
-void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
-	// inizialmente calcolo le dimensioni senza 
-	int padding_rows = 0, padding_cols = 0;
-
-	// Calcolo le dimensioni di output dopo aver applicato il kernel (formula tratta dalle slide di teoria)
-	int out_tmp_rows = floor((image.rows + 2*padding_rows - kernel.rows)/stride + 1);
-	int out_tmp_cols = floor((image.cols + 2*padding_cols - kernel.cols)/stride + 1);
-
-	// uso la create() per definire l'immagine di output (poichè non inizializzata dal main)
-	out.create(out_tmp_rows, out_tmp_cols, CV_32FC1);
-
-	// padding per riottenere le dimensioni di input
-	padding_rows = floor((image.rows - out_tmp_rows)/2);
-	padding_cols = floor((image.cols - out_tmp_cols)/2);
-	zero_padding(out.clone(), padding_rows, padding_cols, out);
-	
-	// definisco un vettore che conterrà ad ogni iterazione la maschera di pixel attuale, pesata coi corrispondenti valori del kernel
-	// grazie a questo, calcolerò poi il risultato della convoluzione come somma di questi valori
-	std::vector<float> convolution_window;
-
-	for(int r = 0; r < image.rows; ++r) {
-		for(int c = 0; c < image.cols; ++c) {
-			// Effettuo i calcoli solamente se, tenuto conto di size e stride, non fuoriesco dall'immagine
-			if((r+kernel.rows)*stride <= image.rows && (c+kernel.cols)*stride <= image.cols) {
-				for(int k = 0; k < out.channels(); ++k) {
-
-					// 2 cicli per analizzare l'attuale kernel
-					for(int r_kernel = 0; r_kernel < kernel.rows; ++r_kernel) {
-						for(int c_kernel = 0; c_kernel < kernel.cols; ++c_kernel) {
-							// estraggo il pixel corrente sull'immagine
-							float image_pixel = image.data[((stride*(r+r_kernel)*image.cols + stride*(c+c_kernel))*image.channels() + k)*image.elemSize1()];
-								
-							// estraggo il pixel corrente sul kernel (ricondandomi di castare correttamente il puntatore restituito)
-							float kernel_pixel = *((float*) &kernel.data[((r_kernel*kernel.cols + c_kernel)*kernel.channels() + k)*kernel.elemSize1()]);
-								
-							// calcolo il valore corrente della convoluzione, e lo inserisco nel vector
-							float current_pixel = image_pixel*kernel_pixel;	
-
-							convolution_window.push_back(current_pixel);
-						}
-					}
-
-					// sommo i valori del vector, con la funzione accumulate
-					float sum_val = std::accumulate(convolution_window.begin(), convolution_window.end(), 0.0f);
-
-					// svuoto il vector per l'iterazione successiva
-					convolution_window.clear();
-
-					// accedo al pixel di output partendo dal pixel corrente nell'input, e sommando il padding necessario
-					*((float*) &out.data[(((r+padding_rows)*out.cols + (c+padding_cols))*out.channels() + k)*out.elemSize1()]) = sum_val;
-				}
-			}
-		}
-	}
-}
-
-/**
- * Convoluzione intera
- */
-void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
-	// Richiamo la convoluzione float, e successivamente riporto i valori in un range [0; 255] con un contrast stretching
-	// convertendo già a CV_8UC1 per ottenere un'immagine pronta da passare a imshow 
-	cv::Mat convfloat_out;
-	convFloat(image, kernel, convfloat_out, stride);
-
-	contrast_stretching(convfloat_out, out, CV_8UC1);
-}
-
-/**
  * Kernel di un blur gaussiano orizzontale
  */
 void gaussianKernel(float sigma, int radius, cv::Mat& kernel) {
@@ -570,7 +569,7 @@ void sobel_x(const cv::Mat& image, cv::Mat& derivative_x) {
 	cv::Mat kernel_sobel_x(sobel_size, sobel_size, CV_32FC1, sobel_x_data);
   
 	// applico le convoluzioni
-	convFloat(image, kernel_sobel_x, derivative_x);
+	conv(image, kernel_sobel_x, derivative_x);
 }
 
 /**
@@ -589,7 +588,37 @@ void sobel_y(const cv::Mat& image, cv::Mat& derivative_y) {
 	cv::Mat kernel_sobel_y(sobel_size, sobel_size, CV_32FC1, sobel_y_data);
   
 	// applico le convoluzioni
-	convFloat(image, kernel_sobel_y, derivative_y);
+	conv(image, kernel_sobel_y, derivative_y);
+}
+
+/**
+ * Derivata x con gradiente 1x3
+ */
+void grad_x(const cv::Mat& image, cv::Mat& derivative_x) {
+	// applico una convoluzione di image con gradiente orizzontale
+
+	// creo il filtro gradiente
+	float grad_x_data[] {-1, 0, 1};
+
+	cv::Mat kernel_grad_x(1, 3, CV_32FC1, grad_x_data);
+  
+	// applico le convoluzioni
+	conv(image, kernel_grad_x, derivative_x);
+}
+
+/**
+ * Derivata y con gradiente 3x1
+ */
+void grad_y(const cv::Mat& image, cv::Mat& derivative_y) {
+	// applico una convoluzione di image con gradiente verticale
+
+	// creo il filtro gradiente
+	float grad_x_data[] {1, 0, -1};
+
+	cv::Mat kernel_grad_y(3, 1, CV_32FC1, grad_x_data);
+  
+	// applico le convoluzioni
+	conv(image, kernel_grad_y, derivative_y);
 }
 
 /**
