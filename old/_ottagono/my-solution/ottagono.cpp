@@ -10,7 +10,7 @@
 #include <vector>
 // #include <algorithm> 	// std::find, std::min_element
 #include <numeric> 		// std::accumulate
-// #include <cmath> 		// std::abs
+#include <cmath> 		// M_PI
 // #include <cstdlib>   	// srand, rand
 
 /**
@@ -160,44 +160,6 @@ void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride 
 }
 
 /**
- * Derivata x con Sobel 3x3
- */
-void sobel_x(const cv::Mat& image, cv::Mat& derivative_x) {
-	// applico una convoluzione di image con Sobel orizzontale
-
-	// creo il filtro di Sobel
-	int sobel_size = 3;
-
-	float sobel_x_data[] { 1,  2,  1,
-						   0,  0,  0,
-						  -1, -2, -1 };
-
-	cv::Mat kernel_sobel_x(sobel_size, sobel_size, CV_32FC1, sobel_x_data);
-  
-	// applico le convoluzioni
-	conv(image, kernel_sobel_x, derivative_x);
-}
-
-/**
- * Derivata y con Sobel 3x3
- */
-void sobel_y(const cv::Mat& image, cv::Mat& derivative_y) {
-	// applico una convoluzione di image con Sobel verticale
-
-	// creo il filtro di Sobel
-	int sobel_size = 3;
-
-	float sobel_y_data[] { 1,  0,  -1,
-						   2,  0,  -2,
-						   1,  0,  -1};
-
-	cv::Mat kernel_sobel_y(sobel_size, sobel_size, CV_32FC1, sobel_y_data);
-  
-	// applico le convoluzioni
-	conv(image, kernel_sobel_y, derivative_y);
-}
-
-/**
  * Derivata x con gradiente 1x3
  */
 void grad_x(const cv::Mat& image, cv::Mat& derivative_x) {
@@ -230,6 +192,30 @@ void grad_y(const cv::Mat& image, cv::Mat& derivative_y) {
 }
 
 /**
+ * Orientazione del gradiente
+ */
+void grad_orientation(const cv::Mat& derivative_x, const cv::Mat& derivative_y, cv::Mat& orientation) {
+	// orientazione = arctan( (df/dy) / (df/dx) )
+
+	orientation.create(derivative_x.rows, derivative_x.cols, CV_32FC1);
+
+	for(int r = 0; r < derivative_x.rows; ++r) {
+		for(int c = 0; c < derivative_x.cols; ++c) {
+			float current_derivative_x = *((float*) &(derivative_x.data[(r*derivative_x.cols + c)*derivative_x.elemSize()]));
+			float current_derivative_y = *((float*) &(derivative_y.data[(r*derivative_y.cols + c)*derivative_y.elemSize()]));
+				
+			float* current_orientation_pixel = ((float*) &(orientation.data[(r*orientation.cols + c)*orientation.elemSize()]));
+			
+			*current_orientation_pixel = atan2(current_derivative_y, current_derivative_x);
+
+			// atan2 restituisce valori nel range [-M_PI; +M_PI]
+			// sommando al valore calcolato M_PI, mi riporto correttamente nel range desiderato [0; 2*M_PI]
+			*current_orientation_pixel += M_PI;
+		}
+	}
+}
+
+/**
  * Data l'immagine di input, l'edge da trovare e i due graidenti sull'immagine,
  * calcola l'immagine di output, completamente nera eccetto per il lato edge
  */
@@ -257,6 +243,47 @@ void find_edge(const cv::Mat& image, int edge, const cv::Mat& Gx, const cv::Mat&
 	}
 }
 
+/**
+ * Prende in input non piu' un ottagono ma un generico poligono n_edges > 8 lati
+ */
+void find_edge_general(const cv::Mat& image, int n_edges, int edge, const cv::Mat& Gx, const cv::Mat& Gy, cv::Mat& output) {
+	output.create(image.rows, image.cols, image.type());
+	output.setTo(255);
+
+	// L'orientazione del lato edge è data da: (2*pi*edge)/n_edges
+	// Voglio che questa orientazione sia uguale a quella del gradiente
+	// Calcolo quindi orientazione dell'edge e orientazione del gradiente
+	
+	// Riassegno un numero all'edge per avere una situazione analoga all'es1
+	edge = (edge + 2)%n_edges;
+
+	float edge_orientation = (2*M_PI*edge) / n_edges;
+	// Tratto a parte il caso edge = 0, riportandolo ad assumere valore 2*pi
+	if(edge == 0) edge_orientation = 2*M_PI;
+
+	std::cout << "Edge orientation: " << edge_orientation << std::endl;
+	
+	cv::Mat gradient_orientation;
+	grad_orientation(Gx, Gy, gradient_orientation);
+	
+	// Orientazioni uguali a meno di un epsilon
+	float eps = 0.5f;
+
+	for(int r = 0; r < output.rows; ++r) {
+		for(int c = 0; c < output.cols; ++c) {
+			int val_Gx = Gx.at<float>(r, c);
+			int val_Gy = Gy.at<float>(r, c);
+			int val_output = 255;
+
+			// Orientazioni uguali a meno di un epsilon, ma inoltre almeno una delle due derivate deve essere non nulla!
+			if((std::fabs(gradient_orientation.at<float>(r, c) - edge_orientation) < eps) && 
+			  (std::fabs(val_Gx) > 0 || std::fabs(val_Gy) > 0))
+				val_output = 0;
+
+			output.at<uint8_t>(r, c) = val_output;
+		}
+	}
+}
 struct ArgumentList {
 	std::string image;
 	int matricola;
@@ -324,9 +351,9 @@ int main(int argc, char **argv) {
 		grad_y(input_img, Gy);
 
 		// Calcolo l'immagine di output, completamente nera eccetto per il lato last_digit
-		cv::Mat output_img;
-		find_edge(input_img, last_digit, Gx, Gy, output_img);
-
+		cv::Mat output_img_es1, output_img_es2;
+		find_edge(input_img, last_digit, Gx, Gy, output_img_es1);
+		find_edge_general(input_img, 8, last_digit, Gx, Gy, output_img_es2);
 		/////////////////////
 
 		//display images
@@ -339,8 +366,11 @@ int main(int argc, char **argv) {
 		cv::namedWindow("Gy", cv::WINDOW_NORMAL);
 		cv::imshow("Gy", Gy);
 
-		cv::namedWindow("output_img", cv::WINDOW_NORMAL);
-		cv::imshow("output_img", output_img);
+		cv::namedWindow("output_img_es1", cv::WINDOW_NORMAL);
+		cv::imshow("output_img_es1", output_img_es1);
+
+		cv::namedWindow("output_img_es2", cv::WINDOW_NORMAL);
+		cv::imshow("output_img_es2", output_img_es2);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(0);

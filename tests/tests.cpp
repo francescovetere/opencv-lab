@@ -592,36 +592,6 @@ void sobel_y(const cv::Mat& image, cv::Mat& derivative_y) {
 }
 
 /**
- * Derivata x con gradiente 1x3
- */
-void grad_x(const cv::Mat& image, cv::Mat& derivative_x) {
-	// applico una convoluzione di image con gradiente orizzontale
-
-	// creo il filtro gradiente
-	float grad_x_data[] {-1, 0, 1};
-
-	cv::Mat kernel_grad_x(1, 3, CV_32FC1, grad_x_data);
-  
-	// applico le convoluzioni
-	conv(image, kernel_grad_x, derivative_x);
-}
-
-/**
- * Derivata y con gradiente 3x1
- */
-void grad_y(const cv::Mat& image, cv::Mat& derivative_y) {
-	// applico una convoluzione di image con gradiente verticale
-
-	// creo il filtro gradiente
-	float grad_x_data[] {1, 0, -1};
-
-	cv::Mat kernel_grad_y(3, 1, CV_32FC1, grad_x_data);
-  
-	// applico le convoluzioni
-	conv(image, kernel_grad_y, derivative_y);
-}
-
-/**
  * Magnitudo e orientazione di Sobel 3x3
  */
 void sobel(const cv::Mat& image, cv::Mat& magnitude, cv::Mat& orientation) {
@@ -674,6 +644,36 @@ void sobel(const cv::Mat& image, cv::Mat& magnitude, cv::Mat& orientation) {
 			*current_orientation_pixel += M_PI;
 		}
 	}
+}
+
+/**
+ * Derivata x con gradiente 1x3
+ */
+void grad_x(const cv::Mat& image, cv::Mat& derivative_x) {
+	// applico una convoluzione di image con gradiente orizzontale
+
+	// creo il filtro gradiente
+	float grad_x_data[] {-1, 0, 1};
+
+	cv::Mat kernel_grad_x(1, 3, CV_32FC1, grad_x_data);
+  
+	// applico le convoluzioni
+	conv(image, kernel_grad_x, derivative_x);
+}
+
+/**
+ * Derivata y con gradiente 3x1
+ */
+void grad_y(const cv::Mat& image, cv::Mat& derivative_y) {
+	// applico una convoluzione di image con gradiente verticale
+
+	// creo il filtro gradiente
+	float grad_x_data[] {1, 0, -1};
+
+	cv::Mat kernel_grad_y(3, 1, CV_32FC1, grad_x_data);
+  
+	// applico le convoluzioni
+	conv(image, kernel_grad_y, derivative_y);
 }
 
 /**
