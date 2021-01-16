@@ -177,6 +177,44 @@ int* compute_histogram(const cv::Mat& img, int max_levels) {
 }
 
 /**
+ * Funzione per il calcolo dell'istogramma equalizzato
+ */
+int* equalize_histogram(int* histogram, int max_levels, int N_pixels) {
+	// equalized_h[j] = CDF[j]*max_levels
+	// CDF[j] = CI[j] / N_pixels
+	// CI[j] = sum{i=0->j}(histogram[i]) = CI[j-1] + histogram[j]
+	
+	int CI[max_levels];
+	CI[0] = histogram[0];
+	for(int j = 1; j < max_levels; ++j) {
+		CI[j] = CI[j-1] + histogram[j];
+	}	
+	
+	int CDF[max_levels];
+	for(int j = 0; j < max_levels; ++j) {
+		CDF[j] = CI[j] / N_pixels;
+	}
+
+	int equalized_h[max_levels];
+	for(int j = 0; j < max_levels; ++j) {
+		equalized_h[j] = CDF[j] * max_levels;
+	}
+
+	return equalized_h; 
+}
+
+/**
+ * Funzione che calcola l'istogramma di un'immagine, lo equalizza e lo riapplica all'immagine
+ */
+void equalize_image(const cv::Mat& input_img, cv::Mat& output_img) {
+	int max_levels = 256;
+	int* h = compute_histogram(input_img, max_levels);
+	int* equalized_h = equalize_histogram(h, max_levels, input_img.rows*input_img.cols);
+
+	for(int i = 0; i < max_levels; ++i) std::cout << i << ": " << equalized_h[i] << std::endl;
+}
+
+/**
  * Binarizzo un'immagine di input data una certa soglia
  */
 void binarize(const cv::Mat& input_img, int threshold, cv::Mat& output_img) {
