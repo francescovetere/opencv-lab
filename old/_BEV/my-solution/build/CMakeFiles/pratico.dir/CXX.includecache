@@ -13,19 +13,15 @@ fstream
 -
 numeric
 -
+cmath
+-
 opencv2/core/types.hpp
 -
 opencv2/highgui.hpp
 -
-eigen3/Eigen/Core
--
-utils.h
-/home/francesco/Desktop/VA/lab/old/_BEV/my-solution/utils.h
-
-/home/francesco/Desktop/VA/lab/old/_BEV/my-solution/utils.h
-opencv2/core/core.hpp
--
 opencv2/calib3d.hpp
+-
+eigen3/Eigen/Core
 -
 
 /usr/local/include/opencv4/opencv2/calib3d.hpp
@@ -93,10 +89,6 @@ opencv2/core/check.hpp
 /usr/local/include/opencv4/opencv2/core/check.hpp
 opencv2/core/base.hpp
 -
-
-/usr/local/include/opencv4/opencv2/core/core.hpp
-opencv2/core.hpp
-/usr/local/include/opencv4/opencv2/core/opencv2/core.hpp
 
 /usr/local/include/opencv4/opencv2/core/cv_cpu_dispatch.h
 cv_cpu_config.h

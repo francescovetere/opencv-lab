@@ -87,6 +87,9 @@ void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output)
     	     * (u,v) <- M*(x,y,z)
     	     * ...
     	     */
+            
+            
+
 			Eigen::Vector4f point;
     		point[0] = xmin + c_out*((xmax - xmin)/float(output.cols));
     		point[1] = 0;

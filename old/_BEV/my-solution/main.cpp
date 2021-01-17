@@ -2,19 +2,100 @@
 #include <iostream>
 #include <fstream>
 #include <numeric>
+#include <cmath>
 
 // opencv
 #include <opencv2/core/types.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/calib3d.hpp>
 
 // eigen
 #include <eigen3/Eigen/Core>
 
-// utils
-#include "utils.h"
-
 using namespace std;
 using namespace cv;
+
+/**
+ * Struct per contenere i parametri della camera
+ */
+struct CameraParams {
+    // size
+    int w, h;
+
+    // intrinsics
+    float ku, kv;
+    float u0, v0;
+
+    // estrinsics
+    cv::Affine3f RT;
+};
+
+/**
+ * Funzione per la costruzione della matrice degli estrinseci RT
+ * a partire dai 3 parametri di rotazione e i 3 parametri di traslazione
+ * La RT risultante viene inserita nel parametro affine, ritornato per riferimento
+ */
+void PoseToAffine(float rx, float ry, float rz, float tx, float ty, float tz, cv::Affine3f& affine) {
+    cv::Mat world_RvecX_cam = cv::Mat(1,3,CV_32F);
+    world_RvecX_cam.at<float>(0,0) = rx;
+    world_RvecX_cam.at<float>(0,1) = 0.0;
+    world_RvecX_cam.at<float>(0,2) = 0.0;
+    cv::Mat world_Rx_cam;
+    cv::Rodrigues(world_RvecX_cam, world_Rx_cam); // Converts a rotation matrix to a rotation vector or vice versa. 
+
+/*
+void cv::Rodrigues  (  
+  InputArray   src,
+  OutputArray   dst,
+  OutputArray   jacobian = noArray()  // 3x9 o or 9x3, which is a matrix of partial derivatives of the output array components with respect to the input array components.
+ )   
+*/
+    
+    cv::Mat world_RvecY_cam = cv::Mat(1,3,CV_32F);
+    world_RvecY_cam.at<float>(0,0) = 0.0;
+    world_RvecY_cam.at<float>(0,1) = ry;
+    world_RvecY_cam.at<float>(0,2) = 0.0;
+    cv::Mat world_Ry_cam;
+    cv::Rodrigues(world_RvecY_cam, world_Ry_cam); // Converts a rotation matrix to a rotation vector or vice versa.
+    
+    cv::Mat world_RvecZ_cam = cv::Mat(1,3,CV_32F);
+    world_RvecZ_cam.at<float>(0,0) = 0.0;
+    world_RvecZ_cam.at<float>(0,1) = 0.0;
+    world_RvecZ_cam.at<float>(0,2) = rz;
+    cv::Mat world_Rz_cam;
+    cv::Rodrigues(world_RvecZ_cam, world_Rz_cam); // Converts a rotation matrix to a rotation vector or vice versa.
+    
+    cv::Mat world_R_cam = world_Rx_cam*world_Ry_cam*world_Rz_cam; // Multiplication order is important (it depends on how the rotation is built)
+    
+    cv::Mat world_t_cam = cv::Mat(1,3,CV_32F);
+    world_t_cam.at<float>(0,0) = tx;
+    world_t_cam.at<float>(0,1) = ty;
+    world_t_cam.at<float>(0,2) = tz;
+    
+    /// Data una matrice di rotazione e un vettore di traslazione, restituisce la matrice di rototraslazione
+    affine = cv::Affine3f(world_R_cam, world_t_cam); // costruttore, Affine transform. It represents a 4x4 homogeneous transformation matrix T
+}
+
+/**
+ * Funzione per la lettura di parametri della camera da un file
+ * I parametri vengono poi inseriti in un CameraParams, ritornato per riferimento
+ */
+void LoadCameraParams(const std::string& filename, CameraParams& params) {
+    std::ifstream file;
+    file.open(filename.c_str());
+    
+    file >> params.w >> params.h;
+    
+    file >> params.ku >> params.kv;
+    file >> params.u0 >> params.v0;
+    
+    float rx, ry, rz, tx, ty, tz;
+    file >> rx >> ry >> rz;
+    file >> tx >> ty >> tz;
+    
+    PoseToAffine(rx, ry, rz, tx, ty, tz, params.RT);
+}
+
 
 /**
  * Zero padding
@@ -220,44 +301,48 @@ void binarize(const cv::Mat& input_img, int threshold, cv::Mat& output_img) {
 //   2) per ogni (x,y,z) mondo, calcolare il pixel corrispondente (r_in,c_in) su image, tramite M
 //   3) copiare il pixel (r_in,c_in) di image dentro il pixel (r_out,c_out) di output
 //
-void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output)
-{
+void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output) {
     output.create(400, 400, image.type());
-    
-    // Creazione K e RT
-    // K
+
+	/*** Calcolo RT ***/
+    // attenzione: nei parametri di calibrazione c'e' orientazione e posizione della camera rispetto al mondo, 
+    // quindi la RT che otteniamo è a partire da quei punti camera in punti mondo
+    // voglio fare il contrario, voglio che i punti mondo vengano convertiti in punti camera: lo faccio con inv()
+
+    cv::Affine3f RT_inv = params.RT.inv();
+    Eigen::Matrix<float, 4, 4> RT;
+    RT << RT_inv.matrix(0,0), RT_inv.matrix(0,1), RT_inv.matrix(0,2), RT_inv.matrix(0,3), 
+        RT_inv.matrix(1,0), RT_inv.matrix(1,1), RT_inv.matrix(1,2), RT_inv.matrix(1,3), 
+        RT_inv.matrix(2,0), RT_inv.matrix(2,1), RT_inv.matrix(2,2), RT_inv.matrix(2,3),
+        0,                  0,                  0,                  1;
+
+    /*** Calcolo K ***/
     Eigen::Matrix<float, 3, 4> K;
     K << params.ku,         0, params.u0, 0,
-                 0, params.kv, params.v0, 0,
-                 0,         0,         1, 0;
-    
-    // RT
-    Eigen::Matrix<float, 4, 4> RT;
-    cv::Affine3f RT_inv = params.RT.inv();
-	
-    RT << RT_inv.matrix(0,0), RT_inv.matrix(0,1), RT_inv.matrix(0,2), RT_inv.matrix(0,3),
-          RT_inv.matrix(1,0), RT_inv.matrix(1,1), RT_inv.matrix(1,2), RT_inv.matrix(1,3),
-          RT_inv.matrix(2,0), RT_inv.matrix(2,1), RT_inv.matrix(2,2), RT_inv.matrix(2,3),
-                           0,                  0,                  0,                  1;
+                0, params.kv, params.v0, 0,
+                0,         0,         1, 0;
 
-    // Calcolo di M = K*RT
+    /*** Calcolo M = K*RT ***/
     Eigen::Matrix<float, 3, 4> M;
     M = K*RT;
 
-    std::cout << "M" << std::endl << M << std::endl;
-    
-    // Calcolo i punti sul mondo Pw, e per ciascuno calcolo p = M*Pw 
+    // Calcolo i punti sul mondo Pw, e per ciascuno calcolo p = M*Pw ==> Pw = M^-1*p
     // Limiti dell'area di interesse nel mondo:
-    float x_world_max =  10.0f;
+	float x_world_max =  10.0f;
     float x_world_min = -10.0f;
     float z_world_min =   0.0f;
     float z_world_max =  20.0f;
 
+	float width_max = std::fabs(x_world_max - x_world_min);
+	float height_max = std::fabs(z_world_max - z_world_min);
+    
+    // zw/20 = zbev/400
+    // ==> zw = zbev*20/400
     for(int r = 0; r < output.rows; ++r) {
     	for(int c = 0; c < output.cols; ++c) {
             // Pw = [x 0 z 1]^T, dove x e z sono costruite nel seguente modo:
-            float x = x_world_min + c*((x_world_max - x_world_min)/output.cols); 
-            float z = z_world_max - r*(z_world_max/output.rows);
+            float x = x_world_max - c*(width_max/output.cols);
+            float z = z_world_max - r*(height_max/output.rows);
 
             Eigen::Vector4f point_world(x, 0, z, 1);
 
@@ -269,8 +354,9 @@ void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output)
             float v = point_bev_homogeneus[1]/point_bev_homogeneus[2];
             
             // Assegno al corrente pixel di ouput, il valore dell'immagine nelle coordinate appena calcolate
-            if(u>=0 && u<=(image.cols-1) && v>=0 && v<=(image.rows-1))
-                output.at<uint8_t>(r, c) = image.at<uint8_t>(v, u);
+            if (u > 0 && u < image.cols && v > 0 && v < image.rows) {
+				output.at<uint8_t>(r, c) = image.at<uint8_t>(v, u);
+        	}
         }
     }           
 }
@@ -291,8 +377,7 @@ void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output)
 //
 // HINT: Applicare una binarizzazione dopo la convoluzione
 //
-void FindLines(const cv::Mat & bev, cv::Mat & output)
-{
+void FindLines(const cv::Mat & bev, cv::Mat & output) {
 	output = cv::Mat(400, 400, CV_8UC1, cv::Scalar(0));
 
     /**

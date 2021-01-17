@@ -1,7 +1,0 @@
-/home/francesco/Desktop/VA/zzz-old-va-zzz/Carlini-VA(27, Cattani)/Pratica/CARLINI_302145/CMakeFiles/install/strip.dir
-/home/francesco/Desktop/VA/zzz-old-va-zzz/Carlini-VA(27, Cattani)/Pratica/CARLINI_302145/CMakeFiles/install/local.dir
-/home/francesco/Desktop/VA/zzz-old-va-zzz/Carlini-VA(27, Cattani)/Pratica/CARLINI_302145/CMakeFiles/install.dir
-/home/francesco/Desktop/VA/zzz-old-va-zzz/Carlini-VA(27, Cattani)/Pratica/CARLINI_302145/CMakeFiles/list_install_components.dir
-/home/francesco/Desktop/VA/zzz-old-va-zzz/Carlini-VA(27, Cattani)/Pratica/CARLINI_302145/CMakeFiles/rebuild_cache.dir
-/home/francesco/Desktop/VA/zzz-old-va-zzz/Carlini-VA(27, Cattani)/Pratica/CARLINI_302145/CMakeFiles/edit_cache.dir
-/home/francesco/Desktop/VA/zzz-old-va-zzz/Carlini-VA(27, Cattani)/Pratica/CARLINI_302145/CMakeFiles/pratico.dir

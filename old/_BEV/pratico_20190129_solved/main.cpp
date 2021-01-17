@@ -8,6 +8,7 @@
 
 // eigen
 #include <eigen3/Eigen/Core>
+#include <eigen3/Eigen/Dense>
 
 // utils
 #include "utils.h"
@@ -152,7 +153,7 @@ int convInt(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out)
 //   2) per ogni (x,y,z) mondo, calcolare il pixel corrispondente (r_in,c_in) su image, tramite M
 //   3) copiare il pixel (r_in,c_in) di image dentro il pixel (r_out,c_out) di output
 //
-void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output)
+void BEV(const cv::Mat& image, const CameraParams& params, cv::Mat & output)
 {
 	output = cv::Mat(400, 400, CV_8UC1, cv::Scalar(0));
 
@@ -171,40 +172,98 @@ void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output)
                  0,         0,         1, 0;
 
     //Limiti dell'area di interesse nel mondo:
-    float xmax =  10.0;
-    float xmin = -10.0;
-    float zmin =   0.0;
-    float zmax =  20.0;
+    // float xmax =  10.0;
+    // float xmin = -10.0;
+    // float zmin =   0.0;
+    // float zmax =  20.0;
 
-    for(int r_out = 0; r_out<output.rows;++r_out)
-    {
-    	for(int c_out = 0; c_out<output.cols;++c_out)
-    	{
-    	    /**
-    	     * YOUR CODE HERE:
-    	     *
-    	     * M = ...?
-    	     *
-    	     * (u,v) <- M*(x,y,z)
-    	     * ...
-    	     */
+    Eigen::Matrix<float, 3, 4> M;
+    M = K*RT;
 
-    		Eigen::Vector4f point;
-    		point.x() = xmin + c_out*((xmax - xmin)/float(output.cols));
-    		point.y() = 0;
-    		point.z() = zmax - r_out*(zmax/float(output.rows));
-    		point.w() = 1.0;
+    // [u v]' = K*RT * Pw
+    Eigen::Matrix<float, 4, 4> M_new;
+    M_new << M, 0, 1, 0, 0;
 
-    		Eigen::Vector3f uv_point;
-    		uv_point = K * RT * point;
+    Eigen::Matrix<float, 3, 3> M_new_cropped;
+    M_new_cropped <<  M_new(0,0), M_new(0,2), M_new(0,3),
+                      M_new(1,0), M_new(1,2), M_new(1,3),
+                      M_new(2,0), M_new(2,2), M_new(2,3);
 
-    		double u = uv_point.x() / uv_point.z();
-    		double v = uv_point.y() / uv_point.z();
+    Eigen::Matrix<float, 3, 3> M_inv;
+    M_inv = M_new_cropped.inverse();
 
-    		if(u>=0 && u<=(image.cols-1) && v>=0 && v<=(image.rows-1))
-    			output.data[r_out*output.cols +c_out] = image.data[int(v)*image.cols + int(u)];
-    	}
+    for(int r = 0; r < image.rows; ++r) {
+        for(int c = 0; c < image.cols; ++c) {
+            Eigen::Vector3f uv_point(c, r, 1);
+            Eigen::Vector3f point_world;
+            point_world = M_inv*uv_point;
+
+            Eigen::Vector3f new_point_world;
+            new_point_world[0] = point_world[0] / point_world[2];
+            new_point_world[1] = 0.0f;
+            new_point_world[2] = point_world[1] / point_world[2];
+
+            // std::cout << "Pw" << new_point_world << std::endl << std::endl;
+
+            // point_world[3] = 1.0f;
+
+            // Eigen::Vector3f point_image = M*new_point_world;
+
+            // float u = point_image[0]/point_image[2];
+            // float v = point_image[1]/point_image[2];
+            
+            // x = cols + u/step
+            // float x = output.cols + new_point_world[0]*20/400;
+            // float z = (new_point_world[2])*20/400;
+            float k = 20.0f;
+            new_point_world[0]*=k;
+            new_point_world[2]*=k;
+
+            double z = (output.rows - new_point_world[2]) + 100;
+            double x = (output.cols/2 + new_point_world[0]);
+
+            // std::cout << "new_point_world[0] " << new_point_world[0] << ", x " << x << std::endl;
+            // std::cout << "new_point_world[2] " << new_point_world[2] << ", z " << z << std::endl;
+
+            if(x >= 0 && x <= (output.cols-1) && z >= 0 && z <= (output.rows-1)) {
+                // std::cout << "z, x, val:" 
+                // << z << ", " << x << ", " << (int)image.at<uint8_t>(r, c) << std::endl;
+    			output.at<uint8_t>(z, x) = image.at<uint8_t>(r, c);
+            }
+        }
     }
+
+    // for(int r_out = 0; r_out<output.rows;++r_out)
+    // {
+    // 	for(int c_out = 0; c_out<output.cols;++c_out)
+    // 	{
+    // 	    /**
+    // 	     * YOUR CODE HERE:
+    // 	     *
+    // 	     * M = ...?
+    // 	     *
+    // 	     * (u,v) <- M*(x,y,z)
+    // 	     * ...
+    // 	     */
+
+    // 		Eigen::Vector4f point;
+    // 		// point.x() = xmin + c_out*((xmax - xmin)/float(output.cols));
+    // 		// point.y() = 0;
+    // 		// point.z() = zmax - r_out*(zmax/float(output.rows));
+    // 		// point.w() = 1.0;
+
+
+
+    // 		Eigen::Vector3f uv_point;
+    // 		uv_point = K * RT * point;
+
+    // 		double u = uv_point.x() / uv_point.z();
+    // 		double v = uv_point.y() / uv_point.z();
+
+    // 		if(u>=0 && u<=(image.cols-1) && v>=0 && v<=(image.rows-1))
+    // 			output.data[r_out*output.cols +c_out] = image.data[int(v)*image.cols + int(u)];
+    // 	}
+    // }
 }
 /////////////////////////////////////////////////////////////////////////////
 

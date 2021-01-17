@@ -2,38 +2,27 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/calib3d.hpp>
 
-struct CameraParams
-{
-    // size
+struct CameraParams {
+    // params
     int w, h;
-    // intrinsics
     float ku, kv;
     float u0, v0;
-    // estrinsics
+    
+    // K matrix
+    cv::Matx33f K;
+
+    // RT matrix
     cv::Affine3f RT;
-    
-    cv::Matx33f K()
-    {
-        cv::Matx33f K = cv::Matx33f::zeros();
-        K(0,0) = ku;
-        K(1,1) = kv;
-        K(0,2) = u0;
-        K(1,2) = v0;
-        K(2,2) = 1;
-    }
-    
 };
 
-void LoadPoints(const std::string& filename, std::vector< cv::Point3f >& points)
-{
+void LoadPoints(const std::string& filename, std::vector< cv::Point3f >& points) {
     std::ifstream file;
     file.open(filename.c_str());
     
     int size;
     file >> size;
     
-    for (unsigned int i = 0; i < size; ++i) 
-    {
+    for (unsigned int i = 0; i < size; ++i) {
         cv::Point3f point, point_out;
         file >> point.x >> point.y >> point.z;
 

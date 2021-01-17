@@ -97,7 +97,7 @@ int* equalize_histogram(int* histogram, int max_levels, int N_pixels) {
 
 	int* equalized_h = new int[max_levels];
 	for(int j = 0; j < max_levels; ++j) {
-		equalized_h[j] = CDF[j] * max_levels;
+		equalized_h[j] = CDF[j] * (max_levels-1);
 	}
 
 	return equalized_h; 
@@ -136,13 +136,65 @@ void equalize_image_rgb(const cv::Mat& input_img, cv::Mat& output_img) {
 	// for(int i = 0; i < max_levels; ++i) std::cout << i << ": " << equalized_hg[i] << std::endl;
 	// for(int i = 0; i < max_levels; ++i) std::cout << i << ": " << equalized_hr[i] << std::endl;
 
-	output_img.create(input_img.rows, input_img.cols, CV_8UC3);
+	output_img.create(input_img.rows, input_img.cols, input_img.type());
+	for(int r = 0; r < output_img.rows; ++r)
+		for(int c = 0; c < output_img.cols; ++c) {
+			// b
+			output_img.data[(r*output_img.cols + c)*output_img.channels() + 0] =
+			equalized_hb[input_img.data[(r*input_img.cols + c)*input_img.channels() + 0]];
+			// output_img.at<cv::Vec3b>(r, c)[0] = equalized_hb[input_img.at<cv::Vec3b>(r, c)[0]];
+
+			// g		
+			output_img.data[(r*output_img.cols + c)*output_img.channels() + 1] =
+			equalized_hg[input_img.data[(r*input_img.cols + c)*input_img.channels() + 1]];	
+			// output_img.at<cv::Vec3b>(r, c)[1] = equalized_hg[input_img.at<cv::Vec3b>(r, c)[1]];
+
+			// r
+			output_img.data[(r*output_img.cols + c)*output_img.channels() + 2] =
+			equalized_hr[input_img.data[(r*input_img.cols + c)*input_img.channels() + 2]];
+			// output_img.at<cv::Vec3b>(r, c)[2] = equalized_hr[input_img.at<cv::Vec3b>(r, c)[2]];
+		}
+}
+
+/**
+ * Funzione che calcola l'istogramma di un'immagine, lo equalizza e lo riapplica all'immagine
+ */
+void equalize_image_rgb2(const cv::Mat& input_img, cv::Mat& output_img) {
+	int max_levels = 256;
+	// Creo 3 immagini CV_8UC1 per ciascuno dei 3 canali
+	cv::Mat blue(input_img.rows, input_img.cols, CV_8UC1);
+	cv::Mat green(input_img.rows, input_img.cols, CV_8UC1);
+	cv::Mat red(input_img.rows, input_img.cols, CV_8UC1);
+	
+	for(int r = 0; r < input_img.rows; ++r) {
+		for(int c = 0; c < input_img.cols; ++c) {
+			blue.at<uint8_t>(r, c) = input_img.at<cv::Vec3b>(r, c)[0];
+			green.at<uint8_t>(r, c) = input_img.at<cv::Vec3b>(r, c)[1];
+			red.at<uint8_t>(r, c) = input_img.at<cv::Vec3b>(r, c)[2];
+		}
+	}
+
+	// Calcolo i 3 istogrammi b, g, r
+	int* hb = compute_histogram(blue, max_levels);
+	int* hg = compute_histogram(green, max_levels);
+	int* hr = compute_histogram(red, max_levels);
+
+	// Equalizzo i 3 istogrammi b, g, r
+	int* equalized_hb = equalize_histogram(hb, max_levels, input_img.rows*input_img.cols);
+	int* equalized_hg = equalize_histogram(hg, max_levels, input_img.rows*input_img.cols);
+	int* equalized_hr = equalize_histogram(hr, max_levels, input_img.rows*input_img.cols);
+
+	// for(int i = 0; i < max_levels; ++i) std::cout << i << ": " << equalized_hb[i] << std::endl;
+	// for(int i = 0; i < max_levels; ++i) std::cout << i << ": " << equalized_hg[i] << std::endl;
+	// for(int i = 0; i < max_levels; ++i) std::cout << i << ": " << equalized_hr[i] << std::endl;
+
+	output_img.create(input_img.size(), input_img.type());
 	for(int r = 0; r < output_img.rows; ++r)
 		for(int c = 0; c < output_img.cols; ++c) {
 			// b
 			output_img.at<cv::Vec3b>(r, c)[0] = equalized_hb[input_img.at<cv::Vec3b>(r, c)[0]];
 
-			// g			
+			// g		
 			output_img.at<cv::Vec3b>(r, c)[1] = equalized_hg[input_img.at<cv::Vec3b>(r, c)[1]];
 
 			// r
@@ -190,7 +242,7 @@ int main(int argc, char **argv) {
 	while(!exit_loop) {
 		cv::Mat input_img_gray = cv::imread(args.input_img, CV_8UC1);
 		cv::Mat input_img_rgb = cv::imread(args.input_img); // apro immagine in BGR mode
-		
+
 		if(input_img_gray.empty()) {
 			std::cout << "Error loading input_img: " << argv[2] << std::endl;
     		return 1;

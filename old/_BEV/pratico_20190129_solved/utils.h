@@ -12,16 +12,6 @@ struct CameraParams
     // estrinsics
     cv::Affine3f RT;
     
-    cv::Matx33f K()
-    {
-        cv::Matx33f K = cv::Matx33f::zeros();
-        K(0,0) = ku;
-        K(1,1) = kv;
-        K(0,2) = u0;
-        K(1,2) = v0;
-        K(2,2) = 1;
-    }
-    
 };
 
 void LoadPoints(const std::string& filename, std::vector< cv::Point3f >& points)
