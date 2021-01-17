@@ -415,7 +415,7 @@ void myFindHomographyRansac(const std::vector<cv::Point2f> & points1, const std:
 
     // Calcolo l'omografia coi samples appena scelti
     myFindHomographySVD(sample1, sample0, H);
-
+  
     // Controllo quanti inliers rispettano l'omografia
     for(unsigned int i = 0; i < points0.size(); ++i) {
         cv::Mat p0_euclidean(2, 1, CV_64FC1);
