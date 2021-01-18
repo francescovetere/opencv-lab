@@ -1,0 +1,7 @@
+/home/francesco/Desktop/VA/lab/old/demosaicatura/my-solution/build/CMakeFiles/install/local.dir
+/home/francesco/Desktop/VA/lab/old/demosaicatura/my-solution/build/CMakeFiles/install.dir
+/home/francesco/Desktop/VA/lab/old/demosaicatura/my-solution/build/CMakeFiles/list_install_components.dir
+/home/francesco/Desktop/VA/lab/old/demosaicatura/my-solution/build/CMakeFiles/rebuild_cache.dir
+/home/francesco/Desktop/VA/lab/old/demosaicatura/my-solution/build/CMakeFiles/edit_cache.dir
+/home/francesco/Desktop/VA/lab/old/demosaicatura/my-solution/build/CMakeFiles/install/strip.dir
+/home/francesco/Desktop/VA/lab/old/demosaicatura/my-solution/build/CMakeFiles/simple.dir

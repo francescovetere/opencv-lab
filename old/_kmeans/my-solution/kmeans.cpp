@@ -12,7 +12,7 @@
 /// Struttura per rappresentate un cluster
 /// Da eventualmente modificare a piacere
 ///
-typedef struct _cluster {
+struct cluster {
 	int num_pixels=0;    //number of pixel in cluster, inizialmente facoltativo
 
 	float ur = 0;       //center of mass R
@@ -20,18 +20,18 @@ typedef struct _cluster {
 	float ub = 0;       //center of mass B
 
 	//costruttore
-	_cluster(int _num_pixels=0,float _ur=0, float _ug=0, float _ub=0):num_pixels(_num_pixels), ur(_ur), ug(_ug), ub(_ub) {}
+	cluster(int _num_pixels=0,float _ur=0, float _ug=0, float _ub=0):num_pixels(_num_pixels), ur(_ur), ug(_ug), ub(_ub) {}
 
 	// comparison operator
 	//
 	// in questo caso li confrontiamo in base al numero di elementi
 	// un altro criterio possible potrebbe essere la posizione del baricentro dei pixel
 	//
-	bool operator<(const _cluster & a) {
+	bool operator<(const cluster& a) {
 		return num_pixels < a.num_pixels;
 	}
 
-}cluster;
+};
 /////////////////////////////
 
 

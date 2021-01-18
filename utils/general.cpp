@@ -439,6 +439,7 @@ int otsu_threshold(int* histogram, int levels) {
 // OR fra 1-pixel dell'immagine di input e corrispondenti pixel dell'elemento strutturale
 // N.B. cornice piu' esterna immagine di input esclusa
 void dilation(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	int max_intensity = 255;
 	for(int v = 0; v < output.rows; ++v)
 	{
 		for(int u = 0; u < output.cols; ++u)
@@ -461,6 +462,7 @@ void dilation(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& 
 // AND fra tutti i pixel dell'immagine di input e corrispondenti pixel dell'elemento strutturale
 // N.B. cornice piu' esterna immagine di input esclusa
 void erosion(const cv::Mat& input, const cv::Mat& structural_element, cv::Mat& output) {
+	int max_intensity = 255;
 	bool ok;
 
 	for(int v = 0; v < output.rows; ++v)
@@ -935,30 +937,308 @@ void findPeaks(const cv::Mat& magnitude, const cv::Mat& orientation, cv::Mat& ou
 
 
 
+/**
+ * Funzione che esegue una demosaicatura GBRG, con il metodo downsample 2x
+ */
+void bayer_GBRG_downsample(const cv::Mat& input_img, cv::Mat& output_img) {
+	// Fattore moltiplicativo con cui mi muovo lungo l'input
+	int stride = 2;
+	
+	// L'immagine di output subisce un downsample pari al valore di stride
+	output_img.create(input_img.rows/stride, input_img.cols/stride, CV_8UC3);
+
+	int result_b, result_g, result_r;
+
+	// Ciclo sull'output, che avrà dimensioni pari alla metà dell'input in questo caso
+	for(int r = 0; r < output_img.rows; ++r) {
+		for(int c = 0; c < output_img.cols; ++c) {
+
+			// Le righe e colonne di riferimento sull'input sono quindi ottenute moltiplicando
+			// riga e colonna corrente dell'output per un fattore di stride = 2
+			int r_ = r * stride; int c_ = c * stride;
+
+			// Costruisco i valori risultato b, g e r
+
+			// B = (top-right)
+			result_b = input_img.data[((c_+1) + r_*input_img.cols)];
+				
+			// G = (top-left + bottom-right) / 2
+			result_g = (input_img.data[(c_ + r_*input_img.cols)] + input_img.data[((c_+1) + (r_+1)*input_img.cols) ]) / 2;
+			
+			// R = (bottom-left)
+			result_r = input_img.data[(c_ + (r_+1)*input_img.cols)];
+
+			// Inserisco i valori b, g, r nell'output
+			output_img.data[(c + r*output_img.cols)*output_img.channels() + 0] = result_b; 	//B
+			output_img.data[(c + r*output_img.cols)*output_img.channels() + 1] = result_g;	//G
+			output_img.data[(c + r*output_img.cols)*output_img.channels() + 2] = result_r; 	//R
+		}
+	}
+
+}
+
+/**
+ * Funzione che esegue una demosaicatura GBRG, con il metodo luminance
+ */
+void bayer_GBRG_luminance(const cv::Mat& input_img, cv::Mat& output_img) {
+	output_img.create(input_img.rows, input_img.cols, CV_8UC1);
+
+	int result_b, result_g, result_r;
+
+	const float COEFF_B = 0.3f, COEFF_G = 0.59f, COEFF_R = 0.11f;
+
+	/**
+	 * Pattern GBRG
+	 * G B G B G B --> riga pari
+	 * R G R G R G --> riga dispari
+	 * G B G B G B --> riga pari
+	 * | |
+	 * | --> colonna dispari
+	 * ---> colonna pari
+	 **/
+	for(int r = 0; r < output_img.rows; ++r) {
+		for(int c = 0; c < output_img.cols; ++c) {
+
+			// riga pari 
+			if(r%2 == 0){
+				// colonna pari
+				if(c%2 == 0){
+					result_b = input_img.data[((c+1) + r*input_img.cols)];
+				
+					// G (top-left --> down-right)
+					result_g = (input_img.data[(c + r*input_img.cols)] + input_img.data[((c+1) + (r+1)*input_img.cols) ]) / 2;
+				
+					result_r = input_img.data[(c + (r+1)*input_img.cols)];
+				}
+				
+				// colonna dispari			
+				else {
+					result_b = input_img.data[(c + r*input_img.cols)];
+
+					// G (top-right --> down-left)
+					result_g = (input_img.data[((c+1) + r*input_img.cols)] + input_img.data[(c + (r+1)*input_img.cols)]) / 2;
+
+					result_r = input_img.data[((c+1) + (r+1)*input_img.cols)];
+				}
+			}
+
+			// riga dispari
+			else {
+				// colonna pari
+				if(c%2 == 0){
+					result_b = input_img.data[((c+1) + (r+1)*input_img.cols)];
+
+					// G (top-right --> down-left)
+					result_g = (input_img.data[((c+1) + r*input_img.cols)] + input_img.data[(c + (r+1)*input_img.cols)]) / 2;
+
+					result_r = input_img.data[(c + r*input_img.cols)];
+				}
+
+				// colonna dispari
+				else {
+					result_b = input_img.data[(c + (r+1)*input_img.cols)];
+
+					// G (top-left --> down-right)
+					result_g = (input_img.data[(c + r*input_img.cols)] + input_img.data[((c+1) + (r+1)*input_img.cols)]) / 2;
+
+					result_r = input_img.data[((c+1) + r*input_img.cols)];
+				}
+					
+			}
+
+			output_img.data[(c + r*output_img.cols)] = result_r*COEFF_R + result_g*COEFF_G + result_b*COEFF_B;
+		}
+	}
+}
+
+/**
+ * Funzione che esegue una demosaicatura GBRG, con il metodo simple
+ */
+void bayer_GBRG_simple(const cv::Mat& input_img, cv::Mat& output_img) {
+	output_img.create(input_img.rows, input_img.cols, CV_8UC3);		
+	
+	int result_b, result_g, result_r;
+
+	/** Accesso riga/colonna per immagine a 3 canali di 1 byte ciascuno
+	 * Pattern GBRG
+	 * G B G B G B --> riga pari
+	 * R G R G R G --> riga dispari
+	 * G B G B G B --> riga pari
+	 * | |
+	 * | --> colonna dispari
+	 * ---> colonna pari
+	 **/
+	for(int r = 0; r < output_img.rows; ++r) {
+		for(int c = 0; c < output_img.cols; ++c) {
+
+			// riga pari 
+			if(r%2 == 0){
+				// colonna pari
+				if(c%2 == 0){
+					result_b = input_img.data[((c+1) + r*input_img.cols)];
+				
+					// G (top-left --> down-right)
+					result_g = (input_img.data[(c + r*input_img.cols)] + input_img.data[((c+1) + (r+1)*input_img.cols) ]) / 2;
+					
+					result_r = input_img.data[(c + (r+1)*input_img.cols)];
+				}
+					
+				// colonna dispari			
+				else {
+					result_b = input_img.data[(c + r*input_img.cols)];
+					
+					// G (top-right --> down-left)
+					result_g = (input_img.data[((c+1) + r*input_img.cols)] + input_img.data[(c + (r+1)*input_img.cols)]) / 2;
+
+					result_r = input_img.data[((c+1) + (r+1)*input_img.cols)];
+				}
+			}
+
+			// riga dispari
+			else {
+				// colonna pari
+				if(c%2 == 0){
+					result_b = input_img.data[((c+1) + (r+1)*input_img.cols)];
+
+					// G (top-right --> down-left)
+					result_g = (input_img.data[((c+1) + r*input_img.cols)] + input_img.data[(c + (r+1)*input_img.cols)]) / 2;
+
+					result_r = input_img.data[(c + r*input_img.cols)];
+				}
+
+				// colonna dispari
+				else {
+					result_b = input_img.data[(c + (r+1)*input_img.cols)];
+
+					// G (top-left --> down-right)
+					result_g = (input_img.data[(c + r*input_img.cols)] + input_img.data[((c+1) + (r+1)*input_img.cols)]) / 2;
+
+					result_r = input_img.data[((c+1) + r*input_img.cols)];
+				}
+			}
+
+			output_img.data[(c + r*output_img.cols)*output_img.channels() + 0] = result_b; //B
+			output_img.data[(c + r*output_img.cols)*output_img.channels() + 1] = result_g; //G
+			output_img.data[(c + r*output_img.cols)*output_img.channels() + 2] = result_r; //R
+				
+		}
+	}
+}
+
+/**
+ * Funzione che interpola i valori del vicinato di un pixel dell'immagine di input
+ */
+float interpolation_neighbors(const cv::Mat& input, int pixel_r, int pixel_c, int window_size) {
+	float sum = 0;
+	int num_pixels = 0;
+	for(int r = -(window_size/2); r <= window_size/2; ++r) {
+		for(int c = -(window_size/2); c <= window_size/2; ++c) {
+			// controllo di rimanere dentro l'immagine
+			if(pixel_r+r >= 0 && pixel_r+r <= input.rows-1 && pixel_c+c >= 0 && pixel_c+c <= input.cols-1 &&
+			  !(r == 0 && c == 0) // controllo di non considerare il pixel corrente
+			) {
+				++num_pixels;
+				sum += input.at<uint8_t>(pixel_r + r, pixel_c + c);
+				// std::cout << pixel_r + r << "," << pixel_c + c << "+\n";
+			}
+		}
+	}
+
+	// std::cout << sum << "/" << num_pixels << "=" << sum/num_pixels << std::endl;
+	return sum/num_pixels;
+}
+
+/**
+ * Funzione che esegue una demosaicatura GBRG, con il metodo linear interpolation
+ */
+void bayer_GBRG_interpolation(const cv::Mat& input_img, cv::Mat& output_B, cv::Mat& output_G, cv::Mat& output_R) {
+	output_B = cv::Mat(input_img.rows, input_img.cols, CV_8UC1, cv::Scalar(0));
+	output_G = cv::Mat(input_img.rows, input_img.cols, CV_8UC1, cv::Scalar(0));	
+	output_R = cv::Mat(input_img.rows, input_img.cols, CV_8UC1, cv::Scalar(0));
+	
+	/**
+	 * Pattern RGGB
+	 * R G R G R G --> riga pari
+	 * G B G B G B --> riga dispari
+	 * R G R G R G --> riga pari
+	 * | |
+	 * | --> colonna dispari
+	 * ---> colonna pari
+	 **/
+	for(int r = 0; r < input_img.rows; ++r) {
+		for(int c = 0; c < input_img.cols; ++c) {
+			int val = input_img.data[(c + r*input_img.cols)];
+
+			if(val == 0) val = 1; // in questo modo, il controllo sul vicinato 3x3 è semplice 
+
+			// riga pari 
+			if(r%2 == 0) {
+				// colonna pari
+				if(c%2 == 0){
+					output_R.data[(c + r*input_img.cols)] = val;
+				}
+					
+				// colonna dispari			
+				else {
+					output_G.data[(c + r*input_img.cols)] = val;
+				}
+			}
+
+			// riga dispari
+			else {
+				// colonna pari
+				if(c%2 == 0) {
+					output_G.data[(c + r*input_img.cols)] = val;
+				}
+
+				// colonna dispari
+				else {
+					output_B.data[(c + r*input_img.cols)] = val;
+				}
+					
+			}
+		}
+	}
+
+	// Se valore = 0, controllo sul vicinato 3x3: gli assegno interpolazione dei vicini validi
+	for(int r = 0; r < input_img.rows; ++r) {
+		for(int c = 0; c < input_img.cols; ++c) {
+			if(output_B.at<uint8_t>(r, c) == 0) {
+				float interpolated_val = interpolation_neighbors(input_img, r, c, 3);
+				output_B.at<uint8_t>(r, c) = interpolated_val;
+			}
+
+			if(output_G.at<uint8_t>(r, c) == 0) {
+				float interpolated_val = interpolation_neighbors(input_img, r, c, 3);
+				output_G.at<uint8_t>(r, c) = interpolated_val;
+			}
+			
+			if(output_R.at<uint8_t>(r, c) == 0) {
+				float interpolated_val = interpolation_neighbors(input_img, r, c, 3);
+				output_R.at<uint8_t>(r, c) = interpolated_val;
+			}
+		}
+	}
+}
+
+
+
 int main(int argc, char **argv) {
 	//////////////////////
 	//processing code here
 		
-	float kernel_convfloat_data[] { 1, 0, -1,
-							 	    2, 0, -2,
-							 	    1, 0, -1 };
-
-	float kernel_for_local_maxes[] { 1, 0, -1, 2, 5,
-							 	     2, 0, -2, 3, 4,
-							 	     1, 12, -1, 8, 1, 
+	float kernel_for_local_maxes[] = { 1, 0,  1, 2, 5,
+							 	     2, 0,  2, 3, 4,
+							 	     1, 12, 1, 8, 1, 
 									 1, 7,  0, 2, 5,
 									 1, 2,  1, 2, 5,
 								   };
 
 	cv::Mat M1(5, 5, CV_32FC1, kernel_for_local_maxes);
 	std::cout << "M1: " << M1 << std::endl;
-	
-	std::vector<float> maxs;
-	find_local_maxs(M1, maxs, 3);
 
-	std::cout << "Local maxs: [";
-	for(int i = 0; i < maxs.size(); ++i) std::cout << maxs[i] << " ";
-	std::cout << "]\n";
+	float val = interpolation_neighbors(M1, 4, 4, 3);
+	std::cout << "val: " << val << std::endl;
 	/////////////////////
 
 	//display image
