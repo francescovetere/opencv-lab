@@ -82,31 +82,13 @@ void bayer_GBRG_downsample(const cv::Mat& input_img, cv::Mat& output_img) {
 
 }
 
-/////////////////////////////
-/// Struttura per rappresentate un cluster
-/// Da eventualmente modificare a piacere
-///
+// Struttura per rappresentate un cluster
 struct cluster {
-	int num_pixels=0;    //number of pixel in cluster, inizialmente facoltativo
-
-	float ur = 0;       //center of mass R
-	float ug = 0;       //center of mass G
-	float ub = 0;       //center of mass B
-
-	//costruttore
-	cluster(int _num_pixels=0,float _ur=0, float _ug=0, float _ub=0):num_pixels(_num_pixels), ur(_ur), ug(_ug), ub(_ub) {}
-
-	// comparison operator
-	//
-	// in questo caso li confrontiamo in base al numero di elementi
-	// un altro criterio possible potrebbe essere la posizione del baricentro dei pixel
-	//
-	bool operator<(const cluster& a) {
-		return num_pixels < a.num_pixels;
-	}
-
+	int num_pixels = 0;
+	float ur = 0;
+	float ug = 0;
+	float ub = 0;
 };
-/////////////////////////////
 
 int main(int argc, char **argv) {
 	int frame_number = 0;

@@ -111,8 +111,9 @@ float interpolation_neighbors(const cv::Mat& input, int pixel_r, int pixel_c, in
 	for(int r = -(window_size/2); r <= window_size/2; ++r) {
 		for(int c = -(window_size/2); c <= window_size/2; ++c) {
 			// controllo di rimanere dentro l'immagine
-			if(pixel_r+r >= 0 && pixel_r+r <= input.rows-1 && pixel_c+c >= 0 && pixel_c+c <= input.cols-1 &&
-			  !(r == 0 && c == 0) // controllo di non considerare il pixel corrente
+			if(pixel_r+r >= 0 && pixel_r+r <= input.rows-1 && pixel_c+c >= 0 && pixel_c+c <= input.cols-1 
+			 && !(r == 0 && c == 0) 								// controllo di non considerare il pixel corrente
+			//  && input.at<uint8_t>(pixel_r + r, pixel_c + c) != 0	// controllo di considerare un pixel valido
 			) {
 				++num_pixels;
 				sum += input.at<uint8_t>(pixel_r + r, pixel_c + c);
@@ -272,27 +273,39 @@ int main(int argc, char **argv)
 		// Creazione immagine output a colori, mischiando le 3 precedenti
 		cv::Mat output_BGR(input_img.rows, input_img.cols, CV_8UC3);
 
+		// for(int r = 0; r < output_BGR.rows; ++r) {
+		// 	for(int c = 0; c < output_BGR.cols; ++c) {
+		// 		for(int k = 0; k < output_BGR.channels(); ++k) {
+		// 			int val;
+		// 			switch(k) {
+		// 				case 0: // B
+		// 					val = output_B.data[r*output_B.cols + c];
+		// 					break;
+		// 				case 1: // G
+		// 					val = output_G.data[r*output_G.cols + c];
+		// 					break;
+		// 				case 2: // R
+		// 					val = output_R.data[r*output_R.cols + c];
+		// 					break;
+		// 			}
+
+		// 			output_BGR.data[((r*output_BGR.cols + c)*output_BGR.channels() + k)*output_BGR.elemSize1()] = val;
+		// 		}
+		// 	}
+		// }
 		for(int r = 0; r < output_BGR.rows; ++r) {
 			for(int c = 0; c < output_BGR.cols; ++c) {
-				for(int k = 0; k < output_BGR.channels(); ++k) {
-					int val;
-					switch(k) {
-						case 0: // B
-							val = output_B.data[r*output_B.cols + c];
-							break;
-						case 1: // G
-							val = output_G.data[r*output_G.cols + c];
-							break;
-						case 2: // R
-							val = output_R.data[r*output_R.cols + c];
-							break;
-					}
+				// b
+				output_BGR.at<cv::Vec3b>(r, c)[0] = output_B.at<uint8_t>(r, c);
 
-					output_BGR.data[((r*output_BGR.cols + c)*output_BGR.channels() + k)*output_BGR.elemSize1()] = val;
-				}
+				// g		
+				output_BGR.at<cv::Vec3b>(r, c)[1] = output_G.at<uint8_t>(r, c);
+
+				// r
+				output_BGR.at<cv::Vec3b>(r, c)[2] = output_R.at<uint8_t>(r, c);
 			}
 		}
-
+		
 		//display output_BGR
 		cv::namedWindow("output_BGR", cv::WINDOW_NORMAL);
 		cv::imshow("output_BGR", output_BGR);

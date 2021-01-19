@@ -77,93 +77,70 @@ int main(int argc, char **argv)
 		//opening file
 		std::cout<<"Opening "<<frame_name<<std::endl;
 
-		cv::Mat input_img = cv::imread(frame_name); /// open in RGB mode
+		cv::Mat input_img = cv::imread(frame_name, CV_8UC1); /// open in RGB mode
 		if(input_img.empty())
 		{
 			std::cout<<"Unable to open "<<frame_name<<std::endl;
 			return 1;
 		}
 
-		// creo 4 sottoimmagini
-		const int PARTS = 4;
-
-		cv::Mat tmp_imgs[PARTS];
-		for(int i = 0; i < PARTS; ++i) tmp_imgs[i].create(input_img.rows/2, input_img.cols/2, CV_8UC3);
-
-		cv::Mat output_img(input_img.rows, input_img.cols, CV_8UC3, cv::Scalar(0, 0, 0));
+		cv::Mat output_img(input_img.rows, input_img.cols, input_img.type());
 		
-		struct top_left {
-			int top;
-			int left;
-		};
+		cv::Mat top_left(input_img.rows/2, input_img.cols/2, input_img.type());
+		cv::Mat top_right(input_img.rows/2, input_img.cols/2, input_img.type());
+		cv::Mat bottom_left(input_img.rows/2, input_img.cols/2, input_img.type());
+		cv::Mat bottom_right(input_img.rows/2, input_img.cols/2, input_img.type());
 
-		/* Creo un array di punti top-left: l'i-esimo elemento, indica il punto top-left della sottoimmagine i-esima 
-		   L'ordine delle sottoimmagini è orario, come i quadranti di un piano cartesiano
-		*/
-		top_left top_lefts[PARTS] = {{0, 0}, {0, input_img.cols/2}, {input_img.rows/2, input_img.cols/2}, {input_img.rows/2, 0}}; 
+		int val = input_img.at<uint8_t>(262, 448);
+		std::cout << val << std::endl;
+		
+		// Riempimento delle 4 sottomatrici
+		for(int r = 0; r < input_img.rows; ++r) {
+			for(int c = 0; c < input_img.cols; ++c) {
+				// std::cout << "r, c: " << r << ", " << c << std::endl;
+				// std::cout << "rows, cols " << input_img.rows << ", " << input_img.cols << std::endl;
 
-		/* Riempo le 4 sottoimmagini, ciclando su di esse */
-		for(int i = 0; i < PARTS; ++i) {                                                     
-			for(int v = 0; v < tmp_imgs[i].rows; ++v)
-			{
-				for(int u = 0; u < tmp_imgs[i].cols; ++u)
-				{
-					for(int k = 0; k < tmp_imgs[i].channels(); ++k)
-					{	
-						tmp_imgs[i].data[(v*tmp_imgs[i].cols + u)*tmp_imgs[i].channels() + k] 
-						= input_img.data[(((top_lefts[i].top + v)*input_img.cols) + top_lefts[i].left + u)*input_img.channels() + k];
-					}
+				float val = input_img.at<uint8_t>(r, c);
+				// std::cout << "val " << val << std::endl;
+
+				if(r < input_img.rows/2 && c < input_img.cols/2) {
+					// std::cout << "top-left" << std::endl;
+					top_left.at<uint8_t>(r, c) = val;
+				}
+				else if(r < input_img.rows/2 && c >= input_img.cols/2) {
+					// std::cout << "top-right" << std::endl;
+					top_right.at<uint8_t>(r, c - input_img.cols/2) = val;
+				}
+				else if(r >= input_img.rows/2 && c < input_img.cols/2) {
+					// std::cout << "bottom-left" << std::endl;
+					bottom_left.at<uint8_t>(r - input_img.rows/2, c) = val;
+				}
+				else if(r >= input_img.rows/2 && c >= input_img.cols/2) {
+					// std::cout << "bottom-right" << std::endl;
+					bottom_right.at<uint8_t>(r - input_img.rows/2, c - input_img.cols/2) = val;
 				}
 			}
 		}
-
-
-		/* Riempo l'immagine di output finale */
-		int subimg; // indice della sottoimmagine da considerare
-		int offset_subimg; // indice dell'offset da considerare per riferirsi correttamente alla sottoimmagine subimg-esima
-
-		for(int v = 0; v < output_img.rows; ++v)
-		{
-			for(int u = 0;u < output_img.cols; ++u)
-			{
-				for(int k = 0;k < output_img.channels(); ++k)
-				{	
-					if(v < output_img.rows/2 && u < output_img.cols/2) {
-						subimg = 0;
-						offset_subimg = 0;
-					}
-					else if(v < output_img.rows/2 && u >= output_img.cols/2) {
-						subimg = 1;
-						offset_subimg = 1;
-					}
-
-					else if(v >= output_img.rows/2 && u >= output_img.cols/2) {
-						subimg = 2;
-						offset_subimg = 2;
-					}
-					else if(v >= output_img.rows/2 && u < output_img.cols/2) {
-						subimg = 3;
-						offset_subimg = 3;
-					}
-
-					output_img.data[(v*output_img.cols + u)*output_img.channels() + k] 
-					= tmp_imgs[subimg].data[(((v - top_lefts[offset_subimg].top)*tmp_imgs[subimg].cols) + (u - top_lefts[offset_subimg].left))*tmp_imgs[subimg].channels() + k];
-				}
-			}
-		}
-
-
-
+		
+		// Riempimento matrice di output
+		cv::Mat tmp1, tmp2;
+		cv::hconcat(top_left, top_right, tmp1);
+		cv::hconcat(bottom_left, bottom_right, tmp2);
+		cv::vconcat(tmp1, tmp2, output_img);
+		
 		//display input_img
 		cv::namedWindow("input_img", cv::WINDOW_NORMAL);
 		cv::imshow("input_img", input_img);
 
-		// mostro le 4 sottoimmagini 
-		// for(int i = 0; i < PARTS; ++i) {
-		// 	cv::namedWindow(std::to_string(i), cv::WINDOW_NORMAL);
-		// 	cv::imshow(std::to_string(i), tmp_imgs[i]);
-		// }
-
+		cv::namedWindow("top_left", cv::WINDOW_NORMAL);
+		cv::imshow("top_left", top_left);
+		cv::namedWindow("top_right", cv::WINDOW_NORMAL);
+		cv::imshow("top_right", top_right);
+		cv::namedWindow("bottom_left", cv::WINDOW_NORMAL);
+		cv::imshow("bottom_left", bottom_left);
+		cv::namedWindow("bottom_right", cv::WINDOW_NORMAL);
+		cv::imshow("bottom_right", bottom_right);
+		
 		//display output_img
 		cv::namedWindow("output_img", cv::WINDOW_NORMAL);
 		cv::imshow("output_img", output_img);
