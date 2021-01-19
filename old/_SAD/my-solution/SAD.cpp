@@ -3,50 +3,19 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+// eigen
+// #include <eigen3/Eigen/Core>
+// #include <eigen3/Eigen/Dense>
+
 //std:
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <cmath> // std::abs()
-#include <vector> // std::vector
-
-struct ArgumentList {
-	std::string image_L;
-	std::string image_R;
-	unsigned short w_size;
-};
-
-bool ParseInputs(ArgumentList& args, int argc, char **argv) {
-
-	if(argc<6 || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help"))
-	{
-		std::cout<<"usage: ./ex1 -i <image_L> <image_R> -w <w_size>"<<std::endl;
-		return false;
-	}
-
-	int i = 1;
-	while(i<argc)
-	{
-		if(std::string(argv[i]) == "-i") {
-			++i;
-			args.image_L = std::string(argv[i]);
-			++i;
-			args.image_R = std::string(argv[i]);
-		}
-
-		else if(std::string(argv[i]) == "-w") {
-			++i;
-			args.w_size = (unsigned char) atoi(argv[i]);
-		}
-
-		++i;
-	}
-
-	return true;
-}
-
-// Faccio alpiù 128 confronti (scritto sulle slide)
-const int max_range = 128;
+#include <vector>
+#include <algorithm> 	// std::find, std::min_element
+#include <numeric> 		// std::accumulate
+#include <cmath> 		// std::abs
+#include <cstdlib>   	// srand, rand
 
 /////////////////////////////////////////// Soluzione prof
 void mySAD_Disparity(const cv::Mat & left_image, const cv::Mat & right_image, int radius, cv::Mat & out)
@@ -104,8 +73,9 @@ void mySAD_Disparity(const cv::Mat & left_image, const cv::Mat & right_image, in
 ///////////////////////////////////////////
 
 
-// Mia soluzione ex 1
 void SAD_Disparity(const cv::Mat& L, const cv::Mat& R, unsigned short w_size, cv::Mat& out) {
+	int max_range = 128;
+	
 	out = cv::Mat::zeros(L.rows, L.cols, CV_8UC1);
 
 	int current_SAD; // SAD corrente calcolata
@@ -124,9 +94,9 @@ void SAD_Disparity(const cv::Mat& L, const cv::Mat& R, unsigned short w_size, cv
 					for(int row_window = 0; row_window < w_size; ++row_window) {
 						for(int col_window = 0; col_window < w_size; ++col_window) {
 								current_SAD += std::abs(
-									(int)L.at<uint8_t>(row_L + row_window, col_L + col_window) -
+									L.at<uint8_t>(row_L + row_window, col_L + col_window) -
 									// faccio la ricerca sulla stessa riga!
-									(int)R.at<uint8_t>(row_L + row_window, col_L - offset + col_window)
+									R.at<uint8_t>(row_L + row_window, col_L - offset + col_window)
 								);
 						}
 					}
@@ -144,66 +114,43 @@ void SAD_Disparity(const cv::Mat& L, const cv::Mat& R, unsigned short w_size, cv
 	}
 }
 
-// Mia soluzione ex 2
-void vDisparity(const cv::Mat& disp, cv::Mat& out) {
-	const int range = 128;
+struct ArgumentList {
+	std::string image_L;
+	std::string image_R;
+	unsigned short w_size;
+};
 
-	// disp avrà valori compresi tra 0 e 128
-	out.create(disp.rows, range, CV_8UC1);
+bool ParseInputs(ArgumentList& args, int argc, char **argv) {
+	int desired_args = 6;
 
-	// per ogni riga creo un'istogramma delle disparità, inizializzato a 0
-	int histogram[range];
-
-	for(int row_disp = 0; row_disp < disp.rows; ++row_disp) {
-		for(int i = 0; i < range; ++i) histogram[i] = 0;
-
-		for(int col_disp = 0; col_disp < disp.cols; ++col_disp) {
-			++histogram[disp.at<uint8_t>(row_disp, col_disp)];
-		}
-
-		for(int col_out = 0; col_out < out.cols; ++col_out) {
-			out.at<uint8_t>(row_disp, col_out) = histogram[col_out];
-		}
+	if(argc < desired_args || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help")) {
+		std::cout<<"Usage: " << argv[0] << " -i <image_L> <image_R> -w <w_size>" <<std::endl;
+		return false;
 	}
-}
 
-// Mia soluzione ex 2
-void vDisparity2(const cv::Mat& L, const cv::Mat& R, cv::Mat& out) {
-	const int range = 128;
-
-	// Tengo sempre come range massimo di disparità 128
-	out.create(L.rows, range, CV_8UC1);
-	
-	for(int row_L = 0; row_L < L.rows; ++row_L) {
-		// per ogni riga creo un'istogramma delle disparità, inizializzato a 0
-		int histogram[range];
-		for(int i = 0; i < range; ++i) histogram[i] = 0;
-
-		// per ogni colonna, analizzo i valori dei pixel nelle due immagini
-		for(int col_L = 0; col_L < L.cols; ++col_L) {
-			int val_L = (int)L.at<uint8_t>(row_L, col_L);
-			int val_R = (int)R.at<uint8_t>(row_L, col_L);
-
-			// calcolo la loro differenza, in valore assoluto per evitare differenze negative
-			int disp = std::abs(val_L - val_R);
-			// effettuo un clipping se la differenza è maggiore del massimo range, altrimenti farei segmentation fault sull'istogramma
-			if(disp > 128) disp = 128;
-			
-			++histogram[disp];
+	int i = 1;
+	while(i < argc) {
+		if(std::string(argv[i]) == "-i") {
+			++i;
+			args.image_L = std::string(argv[i]);
+			++i;
+			args.image_R = std::string(argv[i]);
 		}
 
-		// Riempo la riga corrente nell'output, con l'istogramma appena calcolato
-		for(int col_out = 0; col_out < out.cols; ++col_out) {
-			out.at<uint8_t>(row_L, col_out) = histogram[col_out];
+		else if(std::string(argv[i]) == "-w") {
+			++i;
+			args.w_size = (unsigned char) atoi(argv[i]);
 		}
+
+		++i;
 	}
+
+	return true;
 }
 
 int main(int argc, char **argv) {
 	int frame_number = 0;
 	bool exit_loop = false;
-
-	std::cout<<"Starting ex1"<<std::endl;
 
 	//////////////////////
 	//parse argument list:
@@ -214,22 +161,30 @@ int main(int argc, char **argv) {
 	}
 
 	while(!exit_loop) {
-		cv::Mat image_L = cv::imread(args.image_L, CV_8UC1); // IMPORTANTE: LEGGERE COME CV_8UC1!!!
+		cv::Mat image_L = cv::imread(args.image_L, CV_8UC1);
+		if(image_L.empty()) {
+			std::cout << "Error loading image_L: " << argv[2] << std::endl;
+    		return 1;
+  		
+		}
+
 		cv::Mat image_R = cv::imread(args.image_R, CV_8UC1);
+		if(image_R.empty()) {
+			std::cout << "Error loading image_R: " << argv[3] << std::endl;
+    		return 1;
+  		
+		}
+		
+		cv::Mat disparity1, disparity2;
+
 		unsigned short w_size = args.w_size;
 
-		cv::Mat disparity;
-		cv::Mat v_disparity;
-		cv::Mat v_disparity2;
+		mySAD_Disparity(image_L, image_R, w_size/2, disparity1);
+		SAD_Disparity(image_L, image_R, w_size, disparity2);
+
 		//////////////////////
 		//processing code here
 
-		std::cout << "w_size: " << w_size << std::endl;
-		SAD_Disparity(image_L, image_R, w_size, disparity);
-
-		vDisparity(disparity, v_disparity);
-
-		vDisparity2(image_L, image_R, v_disparity2);
 		/////////////////////
 
 		//display images
@@ -239,24 +194,11 @@ int main(int argc, char **argv) {
 		cv::namedWindow("image_R", cv::WINDOW_AUTOSIZE);
 		cv::imshow("image_R", image_R);
 
-		double minVal, maxVal;
-		cv::minMaxLoc(disparity, &minVal, &maxVal);
-		disparity = 255*(disparity-minVal) / (maxVal-minVal);
-		cv::namedWindow("disparity (w_size: " + std::to_string(w_size) + ")", cv::WINDOW_AUTOSIZE);
-		cv::imshow("disparity (w_size: " + std::to_string(w_size) + ")", disparity);
-		cv::imwrite("disparity (w_size: " + std::to_string(w_size) + ").jpg", disparity);
+		cv::namedWindow("SAD1", cv::WINDOW_AUTOSIZE);
+		cv::imshow("SAD1", disparity1);
 
-		cv::minMaxLoc(v_disparity, &minVal, &maxVal);
-		v_disparity = 255*(v_disparity-minVal) / (maxVal-minVal);
-		cv::namedWindow("v_disparity (w_size: " + std::to_string(w_size) + ")", cv::WINDOW_AUTOSIZE);
-		cv::imshow("v_disparity (w_size: " + std::to_string(w_size) + ")", v_disparity);
-		cv::imwrite("v_disparity (w_size: " + std::to_string(w_size) + ").jpg", v_disparity);
-
-		cv::minMaxLoc(v_disparity2, &minVal, &maxVal);
-		v_disparity2 = 255*(v_disparity2-minVal) / (maxVal-minVal);
-		cv::namedWindow("v_disparity2 (w_size: " + std::to_string(w_size) + ")", cv::WINDOW_AUTOSIZE);
-		cv::imshow("v_disparity2 (w_size: " + std::to_string(w_size) + ")", v_disparity2);
-		cv::imwrite("v_disparity2 (w_size: " + std::to_string(w_size) + ").jpg", v_disparity2);
+		cv::namedWindow("SAD2", cv::WINDOW_AUTOSIZE);
+		cv::imshow("SAD2", disparity2);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(0);

@@ -1223,6 +1223,49 @@ void bayer_GBRG_interpolation(const cv::Mat& input_img, cv::Mat& output_B, cv::M
 
 
 
+void SAD_Disparity(const cv::Mat& L, const cv::Mat& R, unsigned short w_size, cv::Mat& out) {
+	int max_range = 128;
+	
+	out = cv::Mat::zeros(L.rows, L.cols, CV_8UC1);
+
+	int current_SAD; // SAD corrente calcolata
+	int best_SAD;    // la migliore SAD calcolata fin' ora per (row_L, col_L)
+	int best_offset; // la migliore disparità calcolata fin' ora per (row_L, col_L)
+
+	for(int row_L = 0; row_L < L.rows - w_size; ++row_L) { 		// tengo conto della window
+		for(int col_L = 0; col_L < L.cols - w_size; ++col_L) {  // tengo conto della window e dell'offset massimo
+			best_SAD = std::numeric_limits<int>::max();
+			best_offset = 0;
+
+			for(int offset = 0; offset < max_range; ++offset) {
+				if(col_L - offset - w_size >= 0) { // verifico di non uscire dall'immagine destra
+					current_SAD = 0;
+
+					for(int row_window = 0; row_window < w_size; ++row_window) {
+						for(int col_window = 0; col_window < w_size; ++col_window) {
+								current_SAD += std::abs(
+									(int)L.at<uint8_t>(row_L + row_window, col_L + col_window) -
+									// faccio la ricerca sulla stessa riga!
+									(int)R.at<uint8_t>(row_L + row_window, col_L - offset + col_window)
+								);
+						}
+					}
+
+					if(current_SAD < best_SAD) {
+						best_SAD = current_SAD; // aggiorno l'attuale valore migliore di disparità
+						best_offset = offset;
+					}
+				}
+			}
+
+			// Terminati i confronti a tutti gli offset possibili, ho in best_offset il valore da assegnare a out(row_L, col_L)
+			out.at<uint8_t>(row_L, col_L) = best_offset;
+		}
+	}
+}
+
+
+
 int main(int argc, char **argv) {
 	//////////////////////
 	//processing code here
