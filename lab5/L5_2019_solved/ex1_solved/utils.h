@@ -2,10 +2,14 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/calib3d.hpp>
 
-/**
- * Struct per contenere i parametri della camera
- */
-struct CameraParams {
+#undef USE_OPENCVVIZ
+
+#ifdef USE_OPENCVVIZ
+#include <opencv2/viz3d.hpp>
+#endif
+
+struct CameraParams
+{
     // size
     int w, h;
 
@@ -17,31 +21,8 @@ struct CameraParams {
     cv::Affine3f RT;
 };
 
-/**
- * Funzione per la lettura di parametri della camera da un file
- * I parametri vengono poi inseriti in un CameraParams, ritornato per riferimento
- */
-void LoadCameraParams(const std::string& filename, CameraParams& params) {
-    std::ifstream file;
-    file.open(filename.c_str());
-    
-    file >> params.w >> params.h;
-    
-    file >> params.ku >> params.kv;
-    file >> params.u0 >> params.v0;
-    
-    float rx, ry, rz, tx, ty, tz;
-    file >> rx >> ry >> rz;
-    file >> tx >> ty >> tz;
-    
-    PoseToAffine(rx, ry, rz, tx, ty, tz, params.RT);
-}
-
-/**
- * Funzione per la lettura di punti da un file
- * I punti vengono poi inseriti in un vector points, ritornato per riferimento
- */
-void LoadPoints(const std::string& filename, std::vector< cv::Point3f >& points) {
+void LoadPoints(const std::string& filename, std::vector< cv::Point3f >& points)
+{
     std::ifstream file;
     file.open(filename.c_str());
     
@@ -63,12 +44,11 @@ void LoadPoints(const std::string& filename, std::vector< cv::Point3f >& points)
     file.close();
 }
 
-/**
- * Funzione per la costruzione della matrice degli estrinseci RT
- * a partire dai 3 parametri di rotazione e i 3 parametri di traslazione
- * La RT risultante viene inserita nel parametro affine, ritornato per riferimento
- */
-void PoseToAffine(float rx, float ry, float rz, float tx, float ty, float tz, cv::Affine3f& affine) {
+
+
+
+void PoseToAffine(float rx, float ry, float rz, float tx, float ty, float tz, cv::Affine3f& affine)
+{
     cv::Mat world_RvecX_cam = cv::Mat(1,3,CV_32F);
     world_RvecX_cam.at<float>(0,0) = rx;
     world_RvecX_cam.at<float>(0,1) = 0.0;
@@ -105,75 +85,26 @@ void cv::Rodrigues  (
     world_t_cam.at<float>(0,1) = ty;
     world_t_cam.at<float>(0,2) = tz;
     
-    /// Data una matrice di rotazione e un vettore di traslazione, restituisce la matrice di rototraslazione
     affine = cv::Affine3f(world_R_cam, world_t_cam); // costruttore, Affine transform. It represents a 4x4 homogeneous transformation matrix T
 }
 
-/**
- * Funzione per la trasformazione proiettiva prospettica:
- * Dato un vector di punti 3D, ne calcola i rispettivi punti 2D secondo la formula del pin-hole:
- * p' = M*Pw
- */
-void Project(const std::vector< Point3f >& points, const CameraParams& params, std::vector< Point2f >& uv_points) {
-    /*** Calcolo RT ***/
-    // attenzione: nei parametri di calibrazione c'e' orientazione e posizione della camera rispetto al mondo, 
-    // quindi la RT che otteniamo è a partire da quei punti camera in punti mondo
-    // voglio fare il contrario, voglio che i punti mondo vengano convertiti in punti camera: lo faccio con inv()
-
-    Affine3f RT_inv = params.RT.inv(); 
-    Eigen::Matrix<float, 4, 4> RT;
-    RT << RT_inv.matrix(0,0), RT_inv.matrix(0,1), RT_inv.matrix(0,2), RT_inv.matrix(0,3), 
-        RT_inv.matrix(1,0), RT_inv.matrix(1,1), RT_inv.matrix(1,2), RT_inv.matrix(1,3), 
-        RT_inv.matrix(2,0), RT_inv.matrix(2,1), RT_inv.matrix(2,2), RT_inv.matrix(2,3),
-        0,                  0,                  0,                  1;
-
-    /*** Calcolo K ***/
-    Eigen::Matrix<float, 3, 4> K;
-    K << params.ku,         0, params.u0, 0,
-                0, params.kv, params.v0, 0,
-                0,         0,         1, 0;
-
-    /*** Calcolo M = K*RT ***/
-    Eigen::Matrix<float, 3, 4> M;
-    M = K*RT;
-
-    // std::cout << "M" << std::endl << M << std::endl;
+void LoadCameraParams(const std::string& filename, CameraParams& params)
+{
+    std::ifstream file;
+    file.open(filename.c_str());
     
-    /*** Per ogni Pw, calcolo p' = M*Pw, e inserisco p' nel vector di output ***/
-    uv_points.resize(points.size()); // assumo di proiettare tutti i punti del mondo sul piano immagine
-    for (unsigned int i = 0; i < points.size(); ++i) {
-        Eigen::Vector4f point;
-        point.x() = points[i].x;
-        point.y() = points[i].y;
-        point.z() = points[i].z;
-        point.w() = 1.0;
-
-        Eigen::Vector3f uv_point;
-        uv_point = M * point;
-
-        uv_points[i].x = uv_point.x() / uv_point.z();
-        uv_points[i].y = uv_point.y() / uv_point.z();
-    }
+    file >> params.w >> params.h;
+    
+    file >> params.ku >> params.kv;
+    file >> params.u0 >> params.v0;
+    
+    float rx, ry, rz, tx, ty, tz;
+    file >> rx >> ry >> rz;
+    file >> tx >> ty >> tz;
+    
+    PoseToAffine(rx, ry, rz, tx, ty, tz, params.RT);
 }
 
-/**
- * Funzione che data un'immagine float e un vector di punti, 
- * colora di bianco tali punti sull'immagine
- */
-void DrawPixels(const std::vector< cv::Point2f >& uv_points, cv::Mat& image) {
-    for (unsigned int i = 0; i < uv_points.size(); ++i) {
-        float u = uv_points[i].x;
-        float v = uv_points[i].y;
-
-        if (u > 0 && u < image.cols && v > 0 && v < image.rows) {
-            image.at<float>(v,u) = 1.0f;
-        }
-    }
-}
-
-/**
- * Funzione per la conversione di un vector di punti ad una matrice
- */
 void PointsToMat(const std::vector< cv::Point3f >& points, cv::Mat& mat)
 {
     mat = cv::Mat(1, 3*points.size(), CV_32FC3);
@@ -184,3 +115,42 @@ void PointsToMat(const std::vector< cv::Point3f >& points, cv::Mat& mat)
         mat.at<float>(j+2) = points[i].z;
     }
 }
+
+void DrawPixels(const std::vector< cv::Point2f >& uv_points, cv::Mat& image)
+{
+    for (unsigned int i = 0; i < uv_points.size(); ++i)
+    {
+        float u = uv_points[i].x;
+        float v = uv_points[i].y;
+
+        if (u > 0 && u < image.cols && v > 0 && v < image.rows)
+        {
+            image.at<float>(v,u) = 1.0f;
+        }
+    }
+}
+
+#ifdef USE_OPENCVVIZ
+cv::viz::Viz3d Viz3D(const CameraParams& params) 
+{
+    // for visualization
+    cv::viz::Viz3d win("3D view");
+    win.setWindowSize(cv::Size(800, 600));
+    
+    // camera frame
+    cv::viz::WCameraPosition cpw(0.5);
+    win.showWidget("cam", cpw, params.RT);
+    cv::viz::WCameraPosition cpw_frustum(cv::Vec2f(atan2(params.w/2, params.ku), atan2(params.h/2, params.kv))); // Camera frustum
+    win.showWidget("cam_frustum", cpw_frustum, params.RT);
+    
+    // world frame
+    win.showWidget("Coordinate Widget", cv::viz::WCoordinateSystem());
+     
+    // specify window camera pose
+    cv::Affine3f world_T_win_cam;
+    PoseToAffine(0.05, 0.0, 0, 0, -5, -30, world_T_win_cam);
+    win.setViewerPose(world_T_win_cam);
+        
+    return win;
+}
+#endif

@@ -11,6 +11,7 @@
 
 // eigen
 #include <eigen3/Eigen/Core>
+#include <eigen3/Eigen/Dense>
 
 using namespace std;
 using namespace cv;
@@ -301,7 +302,7 @@ void binarize(const cv::Mat& input_img, int threshold, cv::Mat& output_img) {
 //   2) per ogni (x,y,z) mondo, calcolare il pixel corrispondente (r_in,c_in) su image, tramite M
 //   3) copiare il pixel (r_in,c_in) di image dentro il pixel (r_out,c_out) di output
 //
-void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output) {
+void BEV_matches(const cv::Mat & image, const CameraParams& params, cv::Mat & output) {
     output.create(400, 400, image.type());
 
 	/*** Calcolo RT ***/
@@ -360,6 +361,74 @@ void BEV(const cv::Mat & image, const CameraParams& params, cv::Mat & output) {
         }
     }           
 }
+
+void BEV_general(const cv::Mat& image, const CameraParams& params, cv::Mat & output) {
+	output = cv::Mat(400, 400, CV_8UC1, cv::Scalar(0));
+
+	// Matrice degli estrinseci
+    Eigen::Matrix<float, 4, 4> RT;
+    cv::Affine3f RT_inv = params.RT.inv();
+    RT << RT_inv.matrix(0,0), RT_inv.matrix(0,1), RT_inv.matrix(0,2), RT_inv.matrix(0,3),
+          RT_inv.matrix(1,0), RT_inv.matrix(1,1), RT_inv.matrix(1,2), RT_inv.matrix(1,3),
+          RT_inv.matrix(2,0), RT_inv.matrix(2,1), RT_inv.matrix(2,2), RT_inv.matrix(2,3),
+                           0,                  0,                  0,                  1;
+
+    // Matrice degli intrinseci
+    Eigen::Matrix<float, 3, 4> K;
+    K << params.ku,         0, params.u0, 0,
+                 0, params.kv, params.v0, 0,
+                 0,         0,         1, 0;
+
+	// M
+    Eigen::Matrix<float, 3, 4> M;
+    M = K*RT;
+
+    // Calcolo la nuova M, con l'aggiunta del vincolo y = 0
+    Eigen::Matrix<float, 4, 4> M_new;
+    M_new << M, 0, 1, 0, 0;
+
+	// Siccome y = 0, posso eliminare la seconda colonna 
+    Eigen::Matrix<float, 3, 3> M_new_cropped;
+    M_new_cropped <<  M_new(0,0), M_new(0,2), M_new(0,3),
+                      M_new(1,0), M_new(1,2), M_new(1,3),
+                      M_new(2,0), M_new(2,2), M_new(2,3);
+
+	// Calcolo la matrice inversa
+    Eigen::Matrix<float, 3, 3> M_inv;
+    M_inv = M_new_cropped.inverse();
+
+	// Ciclo su ogni punto dell'immagine per calcolare i punti mondo
+    for(int r = 0; r < image.rows; ++r) {
+        for(int c = 0; c < image.cols; ++c) {
+            Eigen::Vector3f uv_point(c, r, 1);
+            Eigen::Vector3f point_world;
+
+			// Calcolo il punto mondo
+            point_world = M_inv*uv_point;
+
+			// Normalizzo il punto mondo
+			float w = point_world[2];
+            float x = point_world[0]/w;
+            float z = point_world[1]/w;
+
+			// Fattore di scala
+			float k = 20.0f;
+			x*=k;
+      		z*=k;
+
+			// Offset delle origini dei due sistemi di riferimento
+      		z = output.rows - z;
+      		x = output.cols/2 + x;
+
+            // Assegno il corrente pixel di input al pixel di output coordinate appena calcolate
+            if (x > 0 && x < output.cols && z > 0 && z < output.rows) {
+				output.at<uint8_t>(z, x) = image.at<uint8_t>(r, c);
+        	}
+        }
+    }
+}
+/////////////////////////////////////////////////////////////////////////////
+
 /////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////
@@ -420,7 +489,7 @@ int main(int argc, char **argv) {
     //
     // funzione che restituisce una Bird Eye View dell'immagine iniziale
     //
-    BEV(input, params, bev_image);
+    BEV_general(input, params, bev_image);
     //////////////////////////////////////////////
 
     //////////////////////////////////////////////

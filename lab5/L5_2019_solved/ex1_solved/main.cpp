@@ -14,6 +14,8 @@
 
 using namespace cv;
 
+void Project(const std::vector<cv::Point3f>& points, const CameraParams& params, std::vector<cv::Point2f>& uv_points);
+
 std::string im_win_name = "Image";
 std::string im_win_name_loop = "Image_loop";
 std::string im_win_name_spiral = "Image_spiral";
@@ -136,3 +138,45 @@ int main(int argc, char **argv) {
 
   return 0;
 }
+
+
+void Project(const std::vector< Point3f >& points, const CameraParams& params, std::vector< Point2f >& uv_points)
+{
+  Affine3f RT_inv = params.RT.inv(); // attenzione: nei parametri di calibrazione c'e' orientazione e posizione della camera rispetto al mondo, quindi la RT che otteniamo a partire da quelli punti camera in punti mondo
+
+  // inv() non fa una vera inversa ma inverte la trasformazione (ci pensa opencv), risultato 3x4
+
+  Eigen::Matrix<float, 4, 4> RT;
+  RT << RT_inv.matrix(0,0), RT_inv.matrix(0,1), RT_inv.matrix(0,2), RT_inv.matrix(0,3), 
+     RT_inv.matrix(1,0), RT_inv.matrix(1,1), RT_inv.matrix(1,2), RT_inv.matrix(1,3), 
+     RT_inv.matrix(2,0), RT_inv.matrix(2,1), RT_inv.matrix(2,2), RT_inv.matrix(2,3),
+     0,                  0,                  0,                  1;
+
+  Eigen::Matrix<float, 3, 4> K;
+  K << params.ku,         0, params.u0, 0,
+               0, params.kv, params.v0, 0,
+               0,         0,         1, 0;
+
+  /**
+   * YOUR CODE HERE: project points from 3D to 2D
+   * hint: p' = K*RT*P'
+   */
+
+  uv_points.resize(points.size());
+  for (unsigned int i = 0; i < points.size(); ++i)
+  {
+    Eigen::Vector4f point;
+    point.x() = points[i].x;
+    point.y() = points[i].y;
+    point.z() = points[i].z;
+    point.w() = 1.0;
+
+    Eigen::Vector3f uv_point;
+    uv_point = K * RT * point;
+
+    uv_points[i].x = uv_point.x() / uv_point.z();
+    uv_points[i].y = uv_point.y() / uv_point.z();
+  }
+}
+
+

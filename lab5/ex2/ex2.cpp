@@ -31,7 +31,6 @@ struct CameraParams {
     cv::Affine3f RT;
 };
 
-
 /**
  * Funzione per la costruzione della matrice degli estrinseci RT
  * a partire dai 3 parametri di rotazione e i 3 parametri di traslazione
@@ -98,118 +97,100 @@ void LoadCameraParams(const std::string& filename, CameraParams& params) {
     PoseToAffine(rx, ry, rz, tx, ty, tz, params.RT);
 }
 
-/**
- * Funzione per la lettura di punti da un file
- * I punti vengono poi inseriti in un vector points, ritornato per riferimento
- */
-void LoadPoints(const std::string& filename, std::vector<cv::Point3f>& points) {
-    std::ifstream file;
-    file.open(filename.c_str());
-    
-    int size;
-    file >> size;
-    
-    for (unsigned int i = 0; i < size; ++i) 
-    {
-        cv::Point3f point, point_out;
-        file >> point.x >> point.y >> point.z;
 
-        //from "VisLab-body-like" to typical "camera-like" reference
-        point_out.z = point.x;
-        point_out.y = -point.z;
-        point_out.x = -point.y;
-        points.push_back(point_out);
-    }
-    
-    file.close();
-}
+void BEV(const cv::Mat& image, const CameraParams& params, cv::Mat & output) {
+	output = cv::Mat(400, 400, CV_8UC3, cv::Scalar(0));
 
-/**
- * Funzione per la trasformazione proiettiva prospettica:
- * Dato un vector di punti 3D, ne calcola i rispettivi punti 2D secondo la formula del pin-hole:
- * p' = M*Pw
- */
-void Project(const std::vector<cv::Point3f>& points, const CameraParams& params, std::vector<cv::Point2f>& uv_points) {
-    /*** Calcolo RT ***/
-    // attenzione: nei parametri di calibrazione c'e' orientazione e posizione della camera rispetto al mondo, 
-    // quindi la RT che otteniamo è a partire da quei punti camera in punti mondo
-    // voglio fare il contrario, voglio che i punti mondo vengano convertiti in punti camera: lo faccio con inv()
-
-    cv::Affine3f RT_inv = params.RT.inv(); 
+	// Matrice degli estrinseci
     Eigen::Matrix<float, 4, 4> RT;
-    RT << RT_inv.matrix(0,0), RT_inv.matrix(0,1), RT_inv.matrix(0,2), RT_inv.matrix(0,3), 
-        RT_inv.matrix(1,0), RT_inv.matrix(1,1), RT_inv.matrix(1,2), RT_inv.matrix(1,3), 
-        RT_inv.matrix(2,0), RT_inv.matrix(2,1), RT_inv.matrix(2,2), RT_inv.matrix(2,3),
-        0,                  0,                  0,                  1;
+    cv::Affine3f RT_inv = params.RT.inv();
+    RT << RT_inv.matrix(0,0), RT_inv.matrix(0,1), RT_inv.matrix(0,2), RT_inv.matrix(0,3),
+          RT_inv.matrix(1,0), RT_inv.matrix(1,1), RT_inv.matrix(1,2), RT_inv.matrix(1,3),
+          RT_inv.matrix(2,0), RT_inv.matrix(2,1), RT_inv.matrix(2,2), RT_inv.matrix(2,3),
+                           0,                  0,                  0,                  1;
 
-    /*** Calcolo K ***/
+    // Matrice degli intrinseci
     Eigen::Matrix<float, 3, 4> K;
     K << params.ku,         0, params.u0, 0,
-                0, params.kv, params.v0, 0,
-                0,         0,         1, 0;
+                 0, params.kv, params.v0, 0,
+                 0,         0,         1, 0;
 
-    /*** Calcolo M = K*RT ***/
+	// M
     Eigen::Matrix<float, 3, 4> M;
     M = K*RT;
 
-    std::cout << "M" << std::endl << M << std::endl;
-    
-    /*** Per ogni Pw, calcolo p' = M*Pw, e inserisco p' nel vector di output ***/
-    uv_points.resize(points.size()); // assumo di proiettare tutti i punti del mondo sul piano immagine
-    for (unsigned int i = 0; i < points.size(); ++i) {
-        Eigen::Vector4f point;
-        point.x() = points[i].x;
-        point.y() = points[i].y;
-        point.z() = points[i].z;
-        point.w() = 1.0;
+    // Calcolo la nuova M, con l'aggiunta del vincolo y = 0
+    Eigen::Matrix<float, 4, 4> M_new;
+    M_new << M, 0, 1, 0, 0;
 
-        Eigen::Vector3f uv_point;
-        uv_point = M * point;
+	// Siccome y = 0, posso eliminare la seconda colonna 
+    Eigen::Matrix<float, 3, 3> M_new_cropped;
+    M_new_cropped <<  M_new(0,0), M_new(0,2), M_new(0,3),
+                      M_new(1,0), M_new(1,2), M_new(1,3),
+                      M_new(2,0), M_new(2,2), M_new(2,3);
 
-        uv_points[i].x = uv_point.x() / uv_point.z();
-        uv_points[i].y = uv_point.y() / uv_point.z();
-    }
-}
+	// Calcolo la matrice inversa
+    Eigen::Matrix<float, 3, 3> M_inv;
+    M_inv = M_new_cropped.inverse();
 
-/**
- * Funzione che data un'immagine float e un vector di punti, 
- * colora di bianco tali punti sull'immagine
- */
-void DrawPixels(const std::vector<cv::Point2f>& uv_points, cv::Mat& image) {
-    for (unsigned int i = 0; i < uv_points.size(); ++i) {
-        float u = uv_points[i].x;
-        float v = uv_points[i].y;
+	// Ciclo su ogni punto dell'immagine per calcolare i punti mondo
+    for(int r = 0; r < image.rows; ++r) {
+        for(int c = 0; c < image.cols; ++c) {
+            Eigen::Vector3f uv_point(c, r, 1);
+            Eigen::Vector3f point_world;
 
-        if (u > 0 && u < image.cols && v > 0 && v < image.rows) {
-            image.at<float>(v,u) = 1.0f;
+			// Calcolo il punto mondo
+            point_world = M_inv*uv_point;
+
+			// Normalizzo il punto mondo
+			float w = point_world[2];
+            float x = point_world[0]/w;
+            float z = point_world[1]/w;
+
+			// Fattore di scala
+			float k = 50.0f;
+			x*=k;
+      		z*=k;
+
+			// Offset delle origini dei due sistemi di riferimento
+      		z = output.rows - z;
+      		x = output.cols/2 + x;
+
+            // Assegno il corrente pixel di input al pixel di output coordinate appena calcolate
+            if (x > 0 && x < output.cols && z > 0 && z < output.rows) {
+				output.at<cv::Vec3b>(z, x)[0] = image.at<cv::Vec3b>(r, c)[0];
+				output.at<cv::Vec3b>(z, x)[1] = image.at<cv::Vec3b>(r, c)[1];
+				output.at<cv::Vec3b>(z, x)[2] = image.at<cv::Vec3b>(r, c)[2];
+        	}
         }
     }
 }
+/////////////////////////////////////////////////////////////////////////////
 
 
 struct ArgumentList {
+	std::string input_img;
 	std::string params_dat;
-	std::string scan_dat;
 };
 
 bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 	int desired_args = 5;
 
 	if(argc < desired_args || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help")) {
-		std::cout<<"Usage: " << argv[0] << " -p <params_front.dat> -s <scan.dat>" <<std::endl;
+		std::cout<<"Usage: " << argv[0] << " -i <input_img> -p <params>" <<std::endl;
 		return false;
 	}
 
 	int i = 1;
 	while(i < argc) {
-		if(std::string(argv[i]) == "-p") {
+		if(std::string(argv[i]) == "-i") {
 			++i;
-			args.params_dat = std::string(argv[i]);
+			args.input_img = std::string(argv[i]);
 		}
 
-		else if(std::string(argv[i]) == "-s") {
+		else if(std::string(argv[i]) == "-p") {
 			++i;
-			args.scan_dat = std::string(argv[i]);
+			args.params_dat = std::string(argv[i]);
 		}
 
 		++i;
@@ -231,34 +212,37 @@ int main(int argc, char **argv) {
 	}
 
 	while(!exit_loop) {
+		cv::Mat input_img = cv::imread(args.input_img);
+		if(input_img.empty()) {
+			std::cout << "Error loading input_img: " << argv[2] << std::endl;
+    		return 1;
+  		
+		}
 		
 		std::string params_dat = args.params_dat;
-		std::string scan_dat = args.scan_dat;
 
 		//////////////////////
 		//processing code here
 
-		// Lettura parametri camera
+		// Devo effettuare una IPM dell'immagine di input sul piano y = 0
+		// Prima di tutto calcolo i punti sul mondo, tramite la matrice M inversa
+		// Dopodichè, calcolo i punti sull'immagine IPM tramite la normale trasformazione prospettica
+
 		CameraParams params;
 		LoadCameraParams(params_dat, params);
-		
-		// Lettura point cloud
-		std::vector<cv::Point3f> points;
-		LoadPoints(scan_dat, points);
 
-		// Trasformazione prospettica dei punti
-		std::vector<cv::Point2f> uv_points;
-		Project(points, params, uv_points);
+		cv::Mat IPM;
+		BEV(input_img, params, IPM);
 
-		// Disegno i punti sull'immagine di output
-		cv::Mat output = cv::Mat::zeros(params.h, params.w, CV_32FC1);
-		DrawPixels(uv_points, output);
 
 		/////////////////////
 
 		//display images
-		cv::namedWindow("output", cv::WINDOW_NORMAL);
-		cv::imshow("output", output);
+		cv::namedWindow("input_img", cv::WINDOW_AUTOSIZE);
+		cv::imshow("input_img", input_img);
+
+		cv::namedWindow("IPM", cv::WINDOW_AUTOSIZE);
+		cv::imshow("IPM", IPM);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(0);
