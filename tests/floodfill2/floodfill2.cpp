@@ -17,6 +17,51 @@
 #include <cmath> 		// std::abs
 #include <cstdlib>   	// srand, rand
 
+void neighbours(const cv::Mat& image, int r, int c, int w_size, cv::Mat& neighs) {
+	neighs.create(w_size, w_size, image.type());
+
+	for(int rr = -(w_size/2); rr <= (w_size/2); ++rr) {
+		for(int cc = -(w_size/2); cc <= (w_size/2); ++cc) {
+			if(rr > 0 && rr < image.rows && cc > 0 && cc < image.cols) {
+				int r = rr + w_size/2;
+				int c = cc + w_size/2;
+				neighs.at<cv::Vec3b>(r, c)[0] = image.at<cv::Vec3b>(rr, cc)[0];
+				neighs.at<cv::Vec3b>(r, c)[1] = image.at<cv::Vec3b>(rr, cc)[1];
+				neighs.at<cv::Vec3b>(r, c)[2] = image.at<cv::Vec3b>(rr, cc)[2];
+
+				std::cout << "ok" << std::endl;
+			}
+		}
+	}
+}
+
+void myFloodfill(cv::Mat& label_image, int r, int c, int bc, int rc, int gc) {
+	int w_size = 3;
+	if(label_image.at<cv::Vec3b>(r, c)[0] == 255 &&
+		label_image.at<cv::Vec3b>(r, c)[1] == 255 &&
+		label_image.at<cv::Vec3b>(r, c)[2] == 255) {	
+
+		label_image.at<cv::Vec3b>(r, c)[0] = bc;
+		label_image.at<cv::Vec3b>(r, c)[1] = gc;
+		label_image.at<cv::Vec3b>(r, c)[2] = rc;
+		// cv::Mat neighs;
+		// neighbours(label_image, r, c, 3, neighs);
+
+		// for(int r = 0; r < neighs.rows; ++r) {
+		// 	for(int c = 0; c < neighs.cols; ++c) {
+		// 		myFloodfill(label_image, r, c, bc, rc, gc);
+		// 	}
+		// }
+		for(int rr = -(w_size/2); rr <= (w_size/2); ++rr) {
+			for(int cc = -(w_size/2); cc <= (w_size/2); ++cc) {
+				if(r+rr > 0 && r+rr < label_image.rows && c+cc > 0 && c+cc < label_image.cols) {
+					myFloodfill(label_image, r+rr, c+cc, bc, rc, gc);
+				}
+			}
+		}
+	}
+}
+
 struct ArgumentList {
 	std::string input_img;
 };
@@ -43,6 +88,7 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+	srand(time(NULL));
 	int frame_number = 0;
 	bool exit_loop = false;
 
@@ -68,31 +114,19 @@ int main(int argc, char **argv) {
 		cv::Mat canny;
 		cv::Canny(input_img, canny, 80, 720);
 
-		cv::Mat label_image;
-    	cv::cvtColor(canny, label_image, cv::COLOR_GRAY2RGB);
+		cv::Mat label_image = canny.clone();
+		cv::cvtColor(label_image.clone(), label_image, cv::COLOR_GRAY2RGB);
 
-		//params for cv::floodFill
-    	cv::Rect rect;
-		int connectivity = 1;
-    	int flags = connectivity == 0 ? 4 : 8;
-		cv::Scalar l_diff(0, 0, 0);
-		cv::Scalar u_diff(0, 0, 0);
-
-
-    	for (int r = 0; r < label_image.rows; ++r) {
-			for (int c = 0; c < label_image.cols; ++c) {
-				uint8_t* bb = (uint8_t*)(label_image.data + (r * label_image.cols + c) * label_image.elemSize() + 0);
-				uint8_t* gg = (uint8_t*)(label_image.data + (r * label_image.cols + c) * label_image.elemSize() + 1);
-				uint8_t* rr = (uint8_t*)(label_image.data + (r * label_image.cols + c) * label_image.elemSize() + 2);
-				if (*bb == 255 && *gg == 255 && *rr == 255) {
+		for(int r = 0; r < label_image.rows; ++r) {
+			for(int c = 0; c < label_image.cols; ++c) {
+				if(label_image.at<cv::Vec3b>(r, c)[0] == 255 &&
+					label_image.at<cv::Vec3b>(r, c)[1] == 255 &&
+					label_image.at<cv::Vec3b>(r, c)[2] == 255) {
 					int bc = rand() % 255;
 					int gc = rand() % 255;
 					int rc = rand() % 255;
-					// uint8_t bc = (uint8_t) cv::theRNG() & 255;
-					// uint8_t gc = (uint8_t) cv::theRNG() & 255;
-					// uint8_t rc = (uint8_t) cv::theRNG() & 255;
-
-					cv::floodFill(label_image, cv::Point(c, r), cv::Scalar(bc, gc, rc), &rect, l_diff, u_diff, flags);
+					myFloodfill(label_image, r, c, bc, gc, rc);
+					// c = label_image.cols; r = label_image.rows; // per uscire
 				}
 			}
 		}
