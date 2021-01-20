@@ -218,8 +218,7 @@ void conv(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride 
 //
 // E' possibile utilizzare alcune funzioni di OpenCV
 //
-void WarpBookCover(const cv::Mat & image, cv::Mat & output, const std::vector<cv::Point2f> & corners_src)
-{
+void WarpBookCover(const cv::Mat & image, cv::Mat & output, const std::vector<cv::Point2f> & corners_src) {
 	std::vector<cv::Point2f> corners_out;
 
 	/*
@@ -235,7 +234,7 @@ void WarpBookCover(const cv::Mat & image, cv::Mat & output, const std::vector<cv
 
     // Calcolo l'omografia H
     cv::Mat H;
-    myFindHomographySVD(corners_dst, corners_src, H);
+    myFindHomographySVD(corners_src, corners_dst, H);
     // H = cv::findHomography(corners_src, corners_dst, cv::RANSAC);
 
     std::cout << "H:" << H << std::endl;
@@ -257,7 +256,7 @@ void WarpBookCover(const cv::Mat & image, cv::Mat & output, const std::vector<cv
     //     }
     // }
     
-	cv::warpPerspective(image, output, H.inv(), output.size());
+	cv::warpPerspective(image, output, H, output.size());
 }
 /////////////////////////////////////////////////////////////////////////////
 

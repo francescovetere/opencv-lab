@@ -271,11 +271,11 @@ void myHarrisCornerDetector(const cv::Mat image, std::vector<cv::KeyPoint> & key
   cv::GaussianBlur(image, blurred_image, cv::Size(3, 3), 1.0, 1.0);
 
   // Effettuo la derivata vera e propria
-  sobel(blurred_image, Ix, Iy);
+  // sobel(blurred_image, Ix, Iy);
 
   // Altrimenti, con la funzione built-in di OpenCV:
-  // cv::Sobel(blurred_image, Ix, CV_32FC1, 1, 0);
-  // cv::Sobel(blurred_image, Iy, CV_32FC1, 0, 1);
+  cv::Sobel(blurred_image, Ix, CV_32FC1, 1, 0);
+  cv::Sobel(blurred_image, Iy, CV_32FC1, 0, 1);
 
   // Calcolo le 3 sottomatrici che compongono la matrice M
   cv::Mat Ix2, Iy2, IxIy;
