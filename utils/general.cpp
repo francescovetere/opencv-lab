@@ -1264,6 +1264,63 @@ void SAD_Disparity(const cv::Mat& L, const cv::Mat& R, unsigned short w_size, cv
 	}
 }
 
+void SAD_Disparity_ratio_distance(const cv::Mat& L, const cv::Mat& R, unsigned short w_size, cv::Mat& out) {
+	int max_range = 128;
+	
+	out = cv::Mat::zeros(L.rows, L.cols, CV_8UC1);
+
+	int current_SAD; // SAD corrente calcolata
+	int best_SAD;    // la migliore SAD calcolata fin' ora per (row_L, col_L)
+	int second_best_SAD;
+	int best_offset; // la migliore disparità calcolata fin' ora per (row_L, col_L)
+	// int second_best_offset;
+
+	for(int row_L = 0; row_L < L.rows - w_size; ++row_L) { 		// tengo conto della window
+		for(int col_L = 0; col_L < L.cols - w_size; ++col_L) {  // tengo conto della window e dell'offset massimo
+			best_SAD = std::numeric_limits<int>::max();
+			second_best_SAD = std::numeric_limits<int>::max();
+			best_offset = 0;
+			// second_best_offset = 0; 
+
+			for(int offset = 0; offset < max_range; ++offset) {
+				if(col_L - offset - w_size >= 0) { // verifico di non uscire dall'immagine destra
+					current_SAD = 0;
+
+					for(int row_window = 0; row_window < w_size; ++row_window) {
+						for(int col_window = 0; col_window < w_size; ++col_window) {
+								current_SAD += std::abs(
+									L.at<uint8_t>(row_L + row_window, col_L + col_window) -
+									// faccio la ricerca sulla stessa riga!
+									R.at<uint8_t>(row_L + row_window, col_L - offset + col_window)
+								);
+						}
+					}
+
+					if(current_SAD < best_SAD) {
+						second_best_SAD = best_SAD;
+						best_SAD = current_SAD;
+						best_offset = offset;
+						
+					}
+
+					else if(current_SAD < second_best_SAD) {
+						second_best_SAD = current_SAD;
+						// second_best_offset = offset;
+					}
+				}
+			}
+
+			out.at<uint8_t>(row_L, col_L) = best_offset;
+
+			float ratio_distance = (float) best_SAD / second_best_SAD;
+			float threshold = 0.8f;
+
+			if(best_SAD == std::numeric_limits<int>::max() || second_best_SAD == std::numeric_limits<int>::max() || ratio_distance > threshold)
+				out.at<uint8_t>(row_L, col_L) = 0;
+		}
+	}
+}
+
 
 
 int main(int argc, char **argv) {
