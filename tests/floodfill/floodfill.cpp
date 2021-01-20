@@ -18,16 +18,14 @@
 #include <cstdlib>   	// srand, rand
 
 struct ArgumentList {
-	std::string image_L;
-	std::string image_R;
-	unsigned short w_size;
+	std::string input_img;
 };
 
 bool ParseInputs(ArgumentList& args, int argc, char **argv) {
-	int desired_args = 6;
+	int desired_args = 3;
 
 	if(argc < desired_args || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help")) {
-		std::cout<<"Usage: " << argv[0] << " -i <image_L> <image_R> -w <w_size>" <<std::endl;
+		std::cout<<"Usage: " << argv[0] << " -i <input_img>" <<std::endl;
 		return false;
 	}
 
@@ -35,14 +33,7 @@ bool ParseInputs(ArgumentList& args, int argc, char **argv) {
 	while(i < argc) {
 		if(std::string(argv[i]) == "-i") {
 			++i;
-			args.image_L = std::string(argv[i]);
-			++i;
-			args.image_R = std::string(argv[i]);
-		}
-
-		else if(std::string(argv[i]) == "-w") {
-			++i;
-			args.w_size = (unsigned char) atoi(argv[i]);
+			args.input_img = std::string(argv[i]);
 		}
 
 		++i;
@@ -64,34 +55,54 @@ int main(int argc, char **argv) {
 	}
 
 	while(!exit_loop) {
-		cv::Mat image_L = cv::imread(args.image_L, CV_8UC1);
-		if(image_L.empty()) {
-			std::cout << "Error loading image_L: " << argv[2] << std::endl;
-    		return 1;
-  		
-		}
-
-		cv::Mat image_R = cv::imread(args.image_R, CV_8UC1);
-		if(image_R.empty()) {
-			std::cout << "Error loading image_R: " << argv[3] << std::endl;
+		cv::Mat input_img = cv::imread(args.input_img, CV_8UC1);
+		if(input_img.empty()) {
+			std::cout << "Error loading input_img: " << argv[2] << std::endl;
     		return 1;
   		
 		}
 		
-		unsigned short w_size = args.w_size;
-		std::cout << "w_size: " << w_size << std::endl;
-
 		//////////////////////
 		//processing code here
+		cv::Mat canny;
+		cv::Canny(input_img, canny, 80, 720);
 
+		cv::Mat label_image;
+    	cv::cvtColor(canny, label_image, cv::COLOR_GRAY2RGB);
+
+		//params for cv::floodFill
+    	cv::Rect rect;
+		int connectivity = 1;
+    	int flags = connectivity == 0 ? 4 : 8;
+		cv::Scalar l_diff(0, 0, 0);
+		cv::Scalar u_diff(0, 0, 0);
+
+
+    	for (int r = 0; r < label_image.rows; ++r) {
+			for (int c = 0; c < label_image.cols; ++c) {
+				uint8_t* bb = (uint8_t*)(label_image.data + (r * label_image.cols + c) * label_image.elemSize() + 0);
+				uint8_t* gg = (uint8_t*)(label_image.data + (r * label_image.cols + c) * label_image.elemSize() + 1);
+				uint8_t* rr = (uint8_t*)(label_image.data + (r * label_image.cols + c) * label_image.elemSize() + 2);
+				if (*bb == 255 && *gg == 255 && *rr == 255) {
+					uint8_t bc = (uint8_t) cv::theRNG() & 255;
+					uint8_t gc = (uint8_t) cv::theRNG() & 255;
+					uint8_t rc = (uint8_t) cv::theRNG() & 255;
+
+					cv::floodFill(label_image, cv::Point(c, r), cv::Scalar(bc, gc, rc), &rect, l_diff, u_diff, flags);
+				}
+			}
+		}
 		/////////////////////
 
 		//display images
-		cv::namedWindow("image_L", cv::WINDOW_AUTOSIZE);
-		cv::imshow("image_L", image_L);
+		cv::namedWindow("input_img", cv::WINDOW_AUTOSIZE);
+		cv::imshow("input_img", input_img);
 
-		cv::namedWindow("image_R", cv::WINDOW_AUTOSIZE);
-		cv::imshow("image_R", image_R);
+		cv::namedWindow("canny", cv::WINDOW_AUTOSIZE);
+		cv::imshow("canny", canny);
+
+		cv::namedWindow("label_image", cv::WINDOW_AUTOSIZE);
+		cv::imshow("label_image", label_image);
 
 		//wait for key or timeout
 		unsigned char key = cv::waitKey(0);
