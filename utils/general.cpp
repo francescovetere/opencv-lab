@@ -132,7 +132,10 @@ void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int st
 					}
 
 					// sommo i valori del vector, con la funzione accumulate
-					float sum_val = std::accumulate(convolution_window.begin(), convolution_window.end(), 0.0f);
+					// float sum_val = std::accumulate(convolution_window.begin(), convolution_window.end(), 0.0f);
+					float sum_val = 0.0f;
+					for(int i = 0; i < convolution_window.size(); ++i) 
+						sum_val += convolution_window[i];
 
 					// svuoto il vector per l'iterazione successiva
 					convolution_window.clear();

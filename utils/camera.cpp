@@ -34,10 +34,20 @@ struct CameraParams {
 /**
  * Funzione per la lettura di parametri della camera da un file
  * I parametri vengono poi inseriti in un CameraParams, ritornato per riferimento
+ * 
+ *  // CameraParams params;
+    // if(!LoadCameraParams(args.params_dat, params)) {
+    //     std::cout << "Error loading params: " << argv[4] << std::endl;
+    // 	return 1;
+    // };
  */
-void LoadCameraParams(const std::string& filename, CameraParams& params) {
+bool LoadCameraParams(const std::string& filename, CameraParams& params) {
     std::ifstream file;
     file.open(filename.c_str());
+
+    if(file.fail()) {
+        return false;
+    }
     
     file >> params.w >> params.h;
     
@@ -49,6 +59,7 @@ void LoadCameraParams(const std::string& filename, CameraParams& params) {
     file >> tx >> ty >> tz;
     
     PoseToAffine(rx, ry, rz, tx, ty, tz, params.RT);
+    return true;
 }
 
 /**

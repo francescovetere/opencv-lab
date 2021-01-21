@@ -495,15 +495,38 @@ int main(int argc, char **argv) {
 		////////////////////////////////////////////////////////
 		cv::Mat stitched;
 
-		cv::Mat padding = cv::Mat::zeros(cv::Size(input_img_2.cols/2, input_img_1.rows), CV_8UC1);
+		cv::Mat padding = cv::Mat::zeros(cv::Size(input_img_1.cols/2 - 100, input_img_1.rows), CV_8UC1);
 		cv::hconcat(input_img_1, padding, stitched);
-
+		// cv::Mat stitched = cv::Mat::zeros(cv::Size(input_img_1.cols + 300, input_img_1.rows + 100), CV_8UC1);
+		// input_img_1.copyTo(stitched(cv::Rect(100, 0, input_img_1.cols, input_img_1.rows)));
+		
 		// cv::Mat warped;
-		cv::warpPerspective(input_img_2, stitched, H.inv(), stitched.size());
+		
+		cv::Mat tmp;
+		cv::warpPerspective(input_img_2, tmp, H.inv(), stitched.size());
 
-		// overlap_images(warped, input_img_1, stitched);
+		// input_img_1.copyTo(stitched(cv::Rect(0, 0, input_img_1.cols, input_img_1.rows)));
+		overlap_images(stitched.clone(), tmp, stitched);
+		// H = H.inv();
+		// for(int r = 0; r < input_img_2.rows; ++r) {
+		// 	for(int c = 0; c < input_img_2.cols; ++c) {
+		// 	// Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
+		// 	cv::Mat curr_point(3, 1, CV_64FC1);
+		// 	curr_point.at<double>(0, 0) = c;
+		// 	curr_point.at<double>(1, 0) = r;
+		// 	curr_point.at<double>(2, 0) = 1;
 
-		/////////////////////
+		// 	cv::Mat transformed_point = H*curr_point;
+			
+		// 	double x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
+		// 	double y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
+
+		// 		if(x >= 0 && x <= stitched.cols - 1 && y >= 0 && y <= stitched.rows - 1) {
+		// 				stitched.at<uint8_t>(y, x) = input_img_2.at<uint8_t>(r, c);
+		// 		}
+		// 	}
+		// }
+		// /////////////////////
 
 		//display images
 		cv::namedWindow("input_img_1", cv::WINDOW_AUTOSIZE);

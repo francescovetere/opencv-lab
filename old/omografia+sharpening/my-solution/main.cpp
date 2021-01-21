@@ -48,7 +48,7 @@ void myFindHomographySVD(const std::vector<cv::Point2f> & points1, const std::ve
   cv::transpose(Vt, V);
 
   // L'ultima colonna di V contiene il vettore soluzione di 9 elementi, che assegno alla matrice H
-	for(int r = 0; r < H.rows; ++r)
+  for(int r = 0; r < H.rows; ++r)
     for(int c = 0; c < H.cols; ++c)
       H.at<double>(r, c) = V.at<double>(r*H.rows + c, V.cols - 1);
   
@@ -234,29 +234,33 @@ void WarpBookCover(const cv::Mat & image, cv::Mat & output, const std::vector<cv
 
     // Calcolo l'omografia H
     cv::Mat H;
-    myFindHomographySVD(corners_src, corners_dst, H);
+    myFindHomographySVD(corners_dst, corners_src, H);
     // H = cv::findHomography(corners_src, corners_dst, cv::RANSAC);
 
     std::cout << "H:" << H << std::endl;
     // cv::Mat Hinv = H.inv();
 
-    // for(int r = 0; r < output.rows; ++r) {
-    //     for(int c = 0; c < output.cols; ++c) {
-    //         // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
-    //         cv::Mat curr_point(3, 1, CV_64FC1);
-    //         curr_point.at<double>(0, 0) = c;
-    //         curr_point.at<double>(1, 0) = r;
-    //         curr_point.at<double>(2, 0) = 1;
+    for(int r = 0; r < output.rows; ++r) {
+        for(int c = 0; c < output.cols; ++c) {
+            // Calcolo la destinazione finale di ciascun punto della nuova cover, grazie ad H
+            cv::Mat curr_point(3, 1, CV_64FC1);
+            curr_point.at<double>(0, 0) = c;
+            curr_point.at<double>(1, 0) = r;
+            curr_point.at<double>(2, 0) = 1;
 
-    //         cv::Mat transformed_point = H*curr_point;
+            cv::Mat transformed_point = H*curr_point;
             
-    //         double x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
-    //         double y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
-
-    //     }
-    // }
+            double x = transformed_point.at<double>(0, 0) / transformed_point.at<double>(2, 0);
+            double y = transformed_point.at<double>(1, 0) / transformed_point.at<double>(2, 0);
+			if(x >= 0 && x <= image.cols - 1 && y >= 0 && y <= image.rows - 1) {
+        		output.at<cv::Vec3b>(r, c)[0] = image.at<cv::Vec3b>(y, x)[0];
+				output.at<cv::Vec3b>(r, c)[1] = image.at<cv::Vec3b>(y, x)[1];
+				output.at<cv::Vec3b>(r, c)[2] = image.at<cv::Vec3b>(y, x)[2];
+      		}
+        }
+    }
     
-	cv::warpPerspective(image, output, H, output.size());
+	// cv::warpPerspective(image, output, H, output.size());
 }
 /////////////////////////////////////////////////////////////////////////////
 

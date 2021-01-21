@@ -11,8 +11,6 @@ iostream
 -
 fstream
 -
-numeric
--
 cmath
 -
 opencv2/core/types.hpp

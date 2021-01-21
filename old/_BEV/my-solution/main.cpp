@@ -1,7 +1,6 @@
 // std
 #include <iostream>
 #include <fstream>
-#include <numeric>
 #include <cmath>
 
 // opencv
@@ -13,8 +12,37 @@
 #include <eigen3/Eigen/Core>
 #include <eigen3/Eigen/Dense>
 
-using namespace std;
-using namespace cv;
+struct ArgumentList {
+    std::string image;
+	std::string params_dat;
+};
+
+bool ParseInputs(ArgumentList& args, int argc, char **argv) {
+	int desired_args = 5;
+
+	if(argc < desired_args || (argc==2 && std::string(argv[1]) == "--help") || (argc==2 && std::string(argv[1]) == "-h") || (argc==2 && std::string(argv[1]) == "-help")) {
+		std::cout<<"Usage: " << argv[0] << " -i <image> -p <params>" <<std::endl;
+		return false;
+	}
+
+	int i = 1;
+	while(i < argc) {
+		if(std::string(argv[i]) == "-i") {
+			++i;
+			args.image = std::string(argv[i]);
+		}
+
+		else if(std::string(argv[i]) == "-p") {
+			++i;
+			args.params_dat = std::string(argv[i]);
+		}
+
+		++i;
+	}
+
+	return true;
+}
+
 
 /**
  * Struct per contenere i parametri della camera
@@ -81,9 +109,13 @@ void cv::Rodrigues  (
  * Funzione per la lettura di parametri della camera da un file
  * I parametri vengono poi inseriti in un CameraParams, ritornato per riferimento
  */
-void LoadCameraParams(const std::string& filename, CameraParams& params) {
+bool LoadCameraParams(const std::string& filename, CameraParams& params) {
     std::ifstream file;
     file.open(filename.c_str());
+
+    if(file.fail()) {
+        return false;
+    }
     
     file >> params.w >> params.h;
     
@@ -95,6 +127,7 @@ void LoadCameraParams(const std::string& filename, CameraParams& params) {
     file >> tx >> ty >> tz;
     
     PoseToAffine(rx, ry, rz, tx, ty, tz, params.RT);
+    return true;
 }
 
 
@@ -173,9 +206,6 @@ void contrast_stretching(const cv::Mat& input, cv::Mat& output, int output_type,
 	}
 }
 
-/**
- * Convoluzione float
- */
 void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int stride = 1) {
 	// inizialmente calcolo le dimensioni senza 
 	int padding_rows = 0, padding_cols = 0;
@@ -219,7 +249,10 @@ void convFloat(const cv::Mat& image, const cv::Mat& kernel, cv::Mat& out, int st
 					}
 
 					// sommo i valori del vector, con la funzione accumulate
-					float sum_val = std::accumulate(convolution_window.begin(), convolution_window.end(), 0.0f);
+					// float sum_val = std::accumulate(convolution_window.begin(), convolution_window.end(), 0.0f);
+					float sum_val = 0.0f;
+					for(int i = 0; i < convolution_window.size(); ++i) 
+						sum_val += convolution_window[i];
 
 					// svuoto il vector per l'iterazione successiva
 					convolution_window.clear();
@@ -252,7 +285,7 @@ void grad_x(const cv::Mat& image, cv::Mat& derivative_x) {
 
 	cv::Mat kernel_grad_x(1, 5, CV_32FC1, grad_x_data);
   
-	// applico le convoluzioni
+	// applico la convoluzione
 	conv(image, kernel_grad_x, derivative_x);
 }
 
@@ -466,30 +499,35 @@ void FindLines(const cv::Mat & bev, cv::Mat & output) {
 
 int main(int argc, char **argv) {
     
-    if (argc < 3) 
-    {
-        std::cerr << "Usage pratico <image_filename> <camera_params_filename>" << std::endl;
-        return 0;
-    }
+	ArgumentList args;
+	if(!ParseInputs(args, argc, argv)) {
+		return 1;
+	}
     
     
     // images
-    cv::Mat input,bev_image, lines_image;
+    cv::Mat input, bev_image, lines_image;
 
-    // load image from file
-    input = cv::imread(argv[1], CV_8UC1);
+    input = cv::imread(args.image, CV_8UC1);
+	if(input.empty()) {
+		std::cout << "Error loading image: " << argv[2] << std::endl;
+    	return 1;
+	}
 
     // load camera params from file
     CameraParams params;
-    LoadCameraParams(argv[2], params);
+    if(!LoadCameraParams(args.params_dat, params)) {
+        std::cout << "Error loading params: " << argv[4] << std::endl;
+    	return 1;
+    };
             
-    
     //////////////////////////////////////////////
     /// EX1
     //
     // funzione che restituisce una Bird Eye View dell'immagine iniziale
     //
-    BEV_general(input, params, bev_image);
+    // BEV_general(input, params, bev_image);
+    BEV_matches(input, params, bev_image);
     //////////////////////////////////////////////
 
     //////////////////////////////////////////////
